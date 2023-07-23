@@ -7,6 +7,8 @@ from scipy.stats import uniform
 from scipy.stats import levy_stable
 from scipy import signal
 import yaml
+import random
+import matplotlib.pyplot as plt
 
 import importlib
 import visualize
@@ -33,10 +35,18 @@ def load_check_config(config_file):
     with open(config_file) as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
         # asserts alpha and beta are in their proper ranges
-        assert 0 < config["environment"]["food_generation_params"]["alpha"] <= 2
-        assert -1 <= config["environment"]["food_generation_params"]["beta"] <= 1
-        assert 0 < config["environment"]["poison_generation_params"]["alpha"] <= 2
-        assert -1 <= config["environment"]["poison_generation_params"]["beta"] <= 1
+        # For food_generation_params
+        assert 0 < config["environment"]["food_generation_params"]["alpha"][0] <= 2
+        assert config["environment"]["food_generation_params"]["alpha"][1] <= 2
+        assert -1 <= config["environment"]["food_generation_params"]["beta"][0] <= 1
+        assert -1 <= config["environment"]["food_generation_params"]["beta"][1] <= 1
+
+        # For poison_generation_params
+        assert 0 < config["environment"]["poison_generation_params"]["alpha"][0] <= 2
+        assert config["environment"]["poison_generation_params"]["alpha"][1] <= 2
+        assert -1 <= config["environment"]["poison_generation_params"]["beta"][0] <= 1
+        assert -1 <= config["environment"]["poison_generation_params"]["beta"][1] <= 1
+
 
         return config
     
@@ -69,30 +79,40 @@ def populate_env_channels(config, env_channels):
 
 def populate_food(config, channel):
     food_params = config["environment"]["food_generation_params"]
+    
     if config["environment"]["food_generation"] == "levy_dust":
-        food_dust = levy_dust(
-            (channel.shape[0], channel.shape[1]),
-            food_params["num_food"],
-            food_params["alpha"],
-            food_params["beta"],
-            pad = food_params["pad"]
-        )
-        discretize_levy_dust(food_dust, channel, pad = food_params["pad"])
+        pad_range = food_params.get("pad", [0, 5])
+        alpha_range = food_params.get("alpha", [0.8, 1.2])
+        beta_range = food_params.get("beta", [0.8, 1.2])
+        num_food_range = food_params.get("num_food", [250, 350])
+        
+        pad = random.randint(*pad_range)
+        alpha = random.uniform(*alpha_range)
+        beta = random.uniform(*beta_range)
+        num_food = random.randint(*num_food_range)
+
+        food_dust = levy_dust((channel.shape[0], channel.shape[1]), num_food, alpha, beta, pad=pad)
+        discretize_levy_dust(food_dust, channel, pad=pad)
     else:
         raise ValueError(f"Food generation method {config['environment']['food_generation']} not recognized.")
 
 
 def populate_poison(config, channel):
     poison_params = config["environment"]["poison_generation_params"]
+    
     if config["environment"]["poison_generation"] == "levy_dust":
-        poison_dust = levy_dust(
-            (channel.shape[0], channel.shape[1]),
-            poison_params["num_poison"],
-            poison_params["alpha"],
-            poison_params["beta"],
-            pad = poison_params["pad"]
-        )
-        discretize_levy_dust(poison_dust, channel, pad = poison_params["pad"])
+        pad_range = poison_params.get("pad", [0, 5])
+        alpha_range = poison_params.get("alpha", [0.5, 0.9])
+        beta_range = poison_params.get("beta", [0.3, 0.7])
+        num_poison_range = poison_params.get("num_poison", [80, 120])
+        
+        pad = random.randint(*pad_range)
+        alpha = random.uniform(*alpha_range)
+        beta = random.uniform(*beta_range)
+        num_poison = random.randint(*num_poison_range)
+
+        poison_dust = levy_dust((channel.shape[0], channel.shape[1]), num_poison, alpha, beta, pad=pad)
+        discretize_levy_dust(poison_dust, channel, pad=pad)
     else:
         raise ValueError(f"Poison generation method {config['environment']['poison_generation']} not recognized.")
 
@@ -101,13 +121,26 @@ def populate_obstacle(config, channel):
     obstacle_params = config["environment"]["obstacle_generation_params"]
     
     if config["environment"]["obstacle_generation"] == "perlin_noise":
-        threshold = obstacle_params.get("threshold", 0.1)  # default threshold is 0.5
-        frequency = obstacle_params.get("frequency", 8)  # default frequency is 1.0
-        
+        threshold_range = obstacle_params.get("threshold", [0.05, 0.2])
+        frequency_range = obstacle_params.get("frequency", [4.0, 16.0])
+        octaves_range = obstacle_params.get("octaves", [1, 4])
+        persistence_range = obstacle_params.get("persistence", [0.25, 1.0])
+        lacunarity_range = obstacle_params.get("lacunarity", [1.5, 3.0])
+
+        # Generate random values based on provided ranges
+        threshold = random.uniform(*threshold_range)
+        frequency = random.uniform(*frequency_range)
+        octaves = random.randint(*octaves_range)
+        persistence = random.uniform(*persistence_range)
+        lacunarity = random.uniform(*lacunarity_range)
+
+        # Generate random offsets for x and y
+        x_offset = random.randint(0, 10000)
+        y_offset = random.randint(0, 10000)
+
         for x in range(channel.shape[0]):
             for y in range(channel.shape[1]):
-                # TODO add random offset, currently static
-                value = noise.pnoise2(x / frequency, y / frequency, octaves=2)
+                value = noise.pnoise2((x + x_offset) / frequency, (y + y_offset) / frequency, octaves=octaves, persistence=persistence, lacunarity=lacunarity)
                 channel[x, y] = 1 if value > threshold else 0
     else:
         raise ValueError(f"Obstacle generation method {config['environment']['obstacle_generation']} not recognized.")
@@ -215,9 +248,9 @@ def visualize_env(config_file, env_channels):
     images[poison_index][env_channels[poison_index] == 0, 3] = 0
     images[obstacle_index][env_channels[obstacle_index] == 0, 3] = 0
     
-    for image in images:
-        visualize.show_image(image)
-    visualize.show_image(blended_image)
+    # for image in images:
+    #     visualize.show_image(image)
+    # visualize.show_image(blended_image)
 
     new_images = np.array([
         images[vis_config["environment"]["channels"].index("obstacle")],
@@ -231,5 +264,34 @@ def visualize_env(config_file, env_channels):
 
 
 env_channels = generate_env("config.yaml", visualize=True)
+
+# %%
+
+# def visualize_levy_dust(shape, points, pad):
+#     fig, ax = plt.subplots(8, 8, figsize=(15, 15))  # 5x4 grid of plots for 20 combinations
+
+#     alphas = np.linspace(0.1, 2, 8)  # Sample 5 values of alpha from 0.1 to 2
+#     betas = np.linspace(-1, 1, 8)    # Sample 4 values of beta from -1 to 1
+
+#     for i, alpha in enumerate(alphas):
+#         for j, beta in enumerate(betas):
+#             channel = np.zeros(shape)
+#             dust = levy_dust(shape, points, alpha, beta, pad)
+#             discretize_levy_dust(dust, channel, pad)
+            
+#             ax[i, j].imshow(channel, cmap='binary')
+#             ax[i, j].set_title(f"α = {alpha:.2f}, β = {beta:.2f}")
+#             ax[i, j].axis('off')
+
+#     plt.tight_layout()
+#     plt.show()
+
+# # Parameters
+# shape = (100, 100)
+# points = 500
+# pad = 5
+
+# visualize_levy_dust(shape, points, pad)
+
 # %%
 

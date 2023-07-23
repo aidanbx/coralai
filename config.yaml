@@ -8,27 +8,36 @@ environment:
     - "obstacle"
     - "chemoattractant"
     - "chemorepellant"
-  obstacle_generation: "perlin_noise"
-  poison_generation: "levy_dust"
+
   food_generation: "levy_dust"
   food_generation_params:
-    pad: 0
-    alpha: 1
-    beta: 1
-    num_food: 300
+    pad: [0, 5]
+    alpha: [0.1, 2]
+    beta: [-1, 1] 
+    num_food: [50, 500]
+
+  poison_generation: "levy_dust"
   poison_generation_params:
-    pad: 0
-    alpha: 0.7
-    beta: 0.5
-    num_poison: 100
+    pad: [0, 5]
+    alpha: [0.1, 2]
+    beta: [-1, 1]
+    num_poison: [20, 200]
+
+  obstacle_generation: "perlin_noise"
   obstacle_generation_params:
-    threshold: 0.1
-    frequency: 8.0
+    obstacle_generation_params:
+    threshold: [0.05, 0.2]
+    frequency: [4.0, 16.0]
+    octaves: [1, 4]
+    persistence: [0.25, 1.0]
+    lacunarity: [1.5, 3.0]
+
   chemoattractant_params:
-    iterations: 20
+    iterations: 50
     dropoff: 0.5
+    
   chemorepellant_params:
-    iterations: 20
+    iterations: 50
     dropoff: 0.5
 
 
