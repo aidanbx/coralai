@@ -6,10 +6,8 @@ environment:
     - "food"
     - "poison"
     - "obstacle"
-  channel_index:
-    food: 0
-    poison: 1
-    obstacle: 2
+    - "chemoattractant"
+    - "chemorepellant"
   obstacle_generation: "perlin_noise"
   poison_generation: "levy_dust"
   food_generation: "levy_dust"
@@ -24,15 +22,37 @@ environment:
     beta: 0.5
     num_poison: 100
   obstacle_generation_params:
-      threshold: 0.1
-      frequency: 10.0
+    threshold: 0.1
+    frequency: 8.0
+  chemoattractant_params:
+    iterations: 20
+    dropoff: 0.5
+  chemorepellant_params:
+    iterations: 20
+    dropoff: 0.5
 
-    
 
 
 visualize:
   colormaps:
-    food: "copper"
-    poison: "summer"
+    food: "Greens"
+    poison: "Oranges"
     obstacle: "binary"
+    chemoattractant: "Greens"
+    chemorepellant: "Oranges"
+  chemo_alpha: 0.75
   
+
+lifecycle:
+  reproduction_metric: "iterations"
+  reproduction_params:
+    iterations: 1000
+
+
+physiology:
+  perceived_channels:
+    - "obstacle"
+    - "chemoattractant"
+    - "chemorepellant"
+    - "communication"
+    - "nutrient_storage"
