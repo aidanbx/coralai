@@ -1,0 +1,38 @@
+environment:
+  width: 100
+  height: 100
+  boundary_condition: "torus"
+  channels: 
+    - "food"
+    - "poison"
+    - "obstacle"
+  channel_index:
+    food: 0
+    poison: 1
+    obstacle: 2
+  obstacle_generation: "perlin_noise"
+  poison_generation: "levy_dust"
+  food_generation: "levy_dust"
+  food_generation_params:
+    pad: 0
+    alpha: 1
+    beta: 1
+    num_food: 300
+  poison_generation_params:
+    pad: 0
+    alpha: 0.7
+    beta: 0.5
+    num_poison: 100
+  obstacle_generation_params:
+      threshold: 0.1
+      frequency: 10.0
+
+    
+
+
+visualize:
+  colormaps:
+    food: "copper"
+    poison: "summer"
+    obstacle: "binary"
+  
