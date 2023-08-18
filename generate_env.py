@@ -1,6 +1,7 @@
 
 
 # %% 
+from matplotlib import animation
 import numpy as np
 import noise
 from scipy.stats import uniform
@@ -176,7 +177,9 @@ def populate_chemoattractant(config, env_channels):
 
     chemoattractant_channel += food_channel
 
-    diffused_channel = diffuse_chemical(chemoattractant_channel, obstacle_channel, config["environment"]["chemoattractant_params"]["iterations"])
+    diffused_channel = diffuse_chemical(chemoattractant_channel, obstacle_channel,
+                                        config["environment"]["chemoattractant_params"]["iterations"],
+                                        config["environment"]["chemoattractant_params"]["dropoff"])
     env_channels[config["environment"]["channels"].index("chemoattractant")] = diffused_channel
 
 def populate_chemorepellant(config, env_channels):
@@ -186,18 +189,20 @@ def populate_chemorepellant(config, env_channels):
 
     chemorepellant_channel += poison_channel
 
-    diffused_channel = diffuse_chemical(chemorepellant_channel, obstacle_channel, config["environment"]["chemorepellant_params"]["iterations"])
+    diffused_channel = diffuse_chemical(chemorepellant_channel, obstacle_channel,
+                                        config["environment"]["chemorepellant_params"]["iterations"],
+                                        config["environment"]["chemorepellant_params"]["dropoff"])
     env_channels[config["environment"]["channels"].index("chemorepellant")] = diffused_channel
 
 
-def diffuse_chemical(channel, obstacle_channel, iterations):
-       # iterations decide how much the chemical spreads out
+def diffuse_chemical(channel, obstacle_channel, iterations, dropoff=0.5):
+    # iterations decide how much the chemical spreads out
     for _ in range(iterations):
         # Using convolution for averaging neighboring cells
         kernel = np.array([
-            [0.3, 0.6, 0.3],
-            [0.6, 1, 0.6],
-            [0.3, 0.6, 0.3]
+            [dropoff/1.4, dropoff, dropoff/1.4],
+            [dropoff,     1,       dropoff],
+            [dropoff/1.4, dropoff, dropoff/1.4]
         ])
         new_channel = signal.convolve2d(channel, kernel, mode='same', boundary='wrap')
         
@@ -263,7 +268,33 @@ def visualize_env(config_file, env_channels):
     visualize.show_image(super_image)
 
 
-env_channels = generate_env("config.yaml", visualize=True)
+env_channels = generate_env("./ALife2023/config.yaml", visualize=True)
+
+
+# %% 
+
+# # Tests diffusion
+
+# channel = np.zeros((100, 100))
+# channel[50, 45] = 10
+# channel[50, 51] = 1
+# channel[50, 52] = 1
+
+# channel [20, 20] = 1
+
+
+# obstacle_channel = np.zeros((100, 100))
+# obstacle_channel[45, 50] = 1
+# obstacle_channel[45, 51] = 1
+# obstacle_channel[45, 52] = 1
+
+# obstacle_channel[20, 20] = 1
+
+# diffused_channel = diffuse_chemical(channel, obstacle_channel, 300, 0.5)
+
+# # plots just the diffused channel
+# plt.imshow(diffused_channel, cmap='hot')
+
 
 # %%
 

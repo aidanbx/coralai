@@ -33,14 +33,12 @@ environment:
     lacunarity: [1.5, 3.0]
 
   chemoattractant_params:
-    iterations: 50
-    dropoff: 0.5
+    iterations: 300
+    dropoff: 1
     
   chemorepellant_params:
-    iterations: 50
-    dropoff: 0.5
-
-
+    iterations: 300
+    dropoff: 1
 
 visualize:
   colormaps:
@@ -49,19 +47,79 @@ visualize:
     obstacle: "binary"
     chemoattractant: "Greens"
     chemorepellant: "Oranges"
-  chemo_alpha: 0.75
+  chemo_alpha: 0.9
+
+interactive_sim:
+  enable: true
+  fps: 10
+  save: false
+  save_path: "ALife2023/interactive_sim"
+  save_name: "interactive_sim"
+  save_format: "gif"
+  save_fps: 10
+  save_start: 0
+  save_end: 100
+  save_every: 1
+  save_colormaps:
+    food: "Greens"
+    poison: "Oranges"
+    obstacle: "binary"
+    chemoattractant: "Greens"
+    chemorepellant: "Oranges"
+  save_chemo_alpha: 0.5
   
-
 lifecycle:
-  reproduction_metric: "iterations"
-  reproduction_params:
-    iterations: 1000
-
+  spore_params:
+    initial_muscle: 1.0
+    initial_nutrient_storage: 1.0
+    initial_communication: "random"
+  inoculation:
+    num_spores: 3
+    where_to_place: "on_food"
+    selection_procedure: "random"
+  stoppage:
+    condition: "iterations"
+    stoppage_range: [500, 1500] 
+    stoppage_final: 0 # placeholder randomly updated
+  min_nutrients: 0.1
 
 physiology:
-  perceived_channels:
+  min_nutrient_storage: 0.1  # minimum nutrient storage for a cell to update
+  
+  channels:
+    - "muscle"
+    - "cytoplasm"
+    - "nutrient_storage"
+    - "communication"
+
+  perception_channels:
     - "obstacle"
     - "chemoattractant"
     - "chemorepellant"
-    - "communication"
+    - "muscle"
+    - "cytoplasm"
     - "nutrient_storage"
+    - "communication"
+
+  actuators:
+    - "rotate"      # %change in direction of flow, energy cost proportional to muscle size
+    - "contraction" # %change in reservoir size (muscle) -- multiplied by open % TODO: Refractory period?
+    - "delta_muscle"
+    - "delta_nutrient_storage"
+  num_communication_channels: 10
+  num_actuators: 17
+  
+
+  perception_kernel:
+    kernel_type: "moore"
+    kernel_radius: 1
+
+physics:
+  cytoplasm_absorption_rate: 0.1
+  exchange_rates:
+    cytoplasm_to_nutrient: 0.8
+    nutrient_to_muscle: 0.7
+    muscle_contraction_cost: 0.2
+  muscle_max_size: 2.0
+  nutrient_max_units: 10
+  muscle_to_nutrient_atrophy_rate: 0.1
