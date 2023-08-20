@@ -71,7 +71,7 @@ interactive_sim:
 lifecycle:
   spore_params:
     initial_muscle: 1.0
-    initial_nutrient_storage: 1.0
+    initial_storage: 1.0
     initial_communication: "random"
   inoculation:
     num_spores: 3
@@ -81,15 +81,12 @@ lifecycle:
     condition: "iterations"
     stoppage_range: [500, 1500] 
     stoppage_final: 0 # placeholder randomly updated
-  min_nutrients: 0.1
 
-physiology:
-  min_nutrient_storage: 0.1  # minimum nutrient storage for a cell to update
-  
+physiology:  
   channels:
     - "muscle"
     - "cytoplasm"
-    - "nutrient_storage"
+    - "storage"
     - "communication"
 
   perception_channels:
@@ -98,14 +95,14 @@ physiology:
     - "chemorepellant"
     - "muscle"
     - "cytoplasm"
-    - "nutrient_storage"
+    - "storage"
     - "communication"
 
   actuators:
     - "rotate"      # %change in direction of flow, energy cost proportional to muscle size
     - "contraction" # %change in reservoir size (muscle) -- multiplied by open % TODO: Refractory period?
     - "delta_muscle"
-    - "delta_nutrient_storage"
+    - "delta_storage"
   num_communication_channels: 10
   num_actuators: 17
   
@@ -117,9 +114,11 @@ physiology:
 physics:
   cytoplasm_absorption_rate: 0.1
   exchange_rates:
-    cytoplasm_to_nutrient: 0.8
-    nutrient_to_muscle: 0.7
-    muscle_contraction_cost: 0.2
+    food_to_cytoplasm: 5.0        # 1 food -> 5 cytoplasm 
+    cytoplasm_to_storage: 0.5    # 1 cytoplasm -> 0.2 storage
+    storage_to_muscle: 0.7       # 1 storage -> 0.7 muscle
+    muscle_contraction_cost: 0.2  
+  min_storage: 0.1
   muscle_max_size: 2.0
-  nutrient_max_units: 10
-  muscle_to_nutrient_atrophy_rate: 0.1
+  storage_max_units: 10
+  muscle_to_storage_atrophy_rate: 0.1

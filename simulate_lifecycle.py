@@ -15,7 +15,7 @@ importlib.reload(visualize)
 
 """
 - Inoculate
-- All cells with nutrient storage present
+- All cells with storage present
 	- Perceive neighborhood of
 		- Obstacle
 		- Chemoattractant
@@ -23,10 +23,10 @@ importlib.reload(visualize)
 		- ^ environment; v life
 		- Muscle
 		- Cytoplasm density/fill
-		- Nutrient storage
+		- Storage
 		- Communication channels
 	- Generate desired
-		- Nutrient storage delta
+		- Storage delta
 		- Muscle contraction and
 		- Reservoir gate open percentages
 			- From my store, what percentage to give to (softmax)
@@ -45,112 +45,18 @@ Cytoplasm can flow into empty space (every cell is capable of carrying 1 or fewe
 even if it has no muscle to pump it.
 """
 
+def create_dumb_physiology(config):
+    perception_channels = config["physiology"]["perception_channels"]
+    actuators = config["physiology"]["actuators"]
 
-def simulate_lifecycle(config_file, env_channels, physiology):
-    config = load_check_config(config_file)
-    live_channels = init_live_channels(config)
-    inoculate_env(config, env_channels, live_channels)
-    run_lifecycle(config, env_channels, live_channels, physiology)
+    def dumb_physiology(perception):
+        return np.random.random(len(actuators))
     
-    return env_channels, live_channels
+    return dumb_physiology
 
 
-def load_check_config(config_file):
-    with open(config_file, 'r') as file:
-        config = yaml.load(file, Loader=yaml.FullLoader)
-        all_channels = config["environment"]["channels"] + config["physiology"]["channels"] + config["physiology"]["perception_channels"] + config["physiology"]["action_channels"]
-
-        # Ensure all perception and action channels exist
-        for channel in config["physiology"]["perception_channels"] + config["physiology"]["action_channels"]:
-            assert channel in all_channels, f"Channel {channel} not found in all_channels"
-            
-        return config
-
-
-def init_live_channels(config):
-    width = config["environment"]["width"]
-    height = config["environment"]["height"]
-    n_live_channels = len(config["physiology"]["channels"])
-    live_channels = np.zeros((n_live_channels, width, height))
-    return live_channels
-    
-
-def inoculate_env(config, env_channels, live_channels):
-    obstacle_channel = env_channels[config["environment"]["channels"].index("obstacle")]
-    poison_channel = env_channels[config["environment"]["channels"].index("poison")]
-    food_channel = env_channels[config["environment"]["channels"].index("food")]
-
-    valid_positions = np.logical_not(np.logical_or(obstacle_channel, poison_channel))
-    
-    # Choose where to place based on configuration
-    if config["lifecycle"]["inoculation"]["where_to_place"] == "random":
-        candidates = np.argwhere(valid_positions)
-    elif config["lifecycle"]["inoculation"]["where_to_place"] == "on_food":
-        candidates = np.argwhere(np.logical_and(food_channel, valid_positions))
-    elif config["lifecycle"]["inoculation"]["where_to_place"] == "next_to_food":
-        # Get positions adjacent to food
-        kernel = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]])
-        adj_to_food = signal.convolve2d(food_channel, kernel, mode='same') > 0
-        candidates = np.argwhere(np.logical_and(adj_to_food, valid_positions))
-    else:
-        raise ValueError(f"Inoculation place method {config['lifecycle']['inoculation']['where_to_place']} not recognized.")
-
-    # Selection procedure (for now, just random. More can be added)
-    if config["lifecycle"]["inoculation"]["selection_procedure"] != "random":
-        raise ValueError(f"Selection procedure {config['lifecycle']['inoculation']['selection_procedure']} not implemented yet.")
-
-    selected_positions = candidates[np.random.choice(candidates.shape[0], config["lifecycle"]["inoculation"]["num_spores"], replace=False)]
-    
-    # Place the spores at selected_positions. More logic can be added to initialize spore properties like muscle, nutrient storage, etc.
-    for position in selected_positions:
-        # environment_matrix[some_spore_channel, position[0], position[1]] = some_initial_value
-        # set nutrient storage to 1
-        live_channels[config["physiology"]["channels"].index("nutrient_storage"), position[0], position[1]] = 1
-
-
-def run_lifecycle(config, env_channels, live_channels, physiology):
-    """
-    Perform the main lifecycle loop.
-    """
-    init_conditions = init_stoppage_condition(config)
-
-    update_num = 0
-    while not stoppage_condition_met(config, update_num, init_conditions):
-        update_num += 1
-        cells_to_update = identify_cells_to_update(config, env_channels, live_channels)
-        
-        for cell in cells_to_update:
-            input = perceive(config, cell, env_channels, live_channels)
-            output = act(config, input, physiology)
-            apply_physics.apply_local_physics(config, cell, output, env_channels, live_channels) 
-        
-        # Visualization, if needed
-
-
-def init_stoppage_condition(config):
-    init_conditions = {}
-    if config["lifecycle"]["stoppage"]["condition"] == "iterations":
-        low = config["lifecycle"]["stoppage"]["stoppage_range"][0]
-        high = config["lifecycle"]["stoppage"]["stoppage_range"][1]
-        assert low < high, "Stoppage range must be increasing."
-        num_iterations = np.random.randint(low, high)
-        init_conditions["num_iterations"] = num_iterations
-    return init_conditions
-
-    
-def stoppage_condition_met(config, update_num, init_conditions):
-    if config["lifecycle"]["stoppage"]["condition"] == "iterations":
-        if init_conditions["num_iterations"] is None:
-            raise ValueError("Stoppage condition 'iterations' not initialized.")
-        return update_num > init_conditions["num_iterations"]
-    else:
-        raise ValueError(f"Stoppage condition {config['lifecycle']['stoppage']['condition']} not recognized.")
-
-
-def identify_cells_to_update(config, env_channels, live_channels):
-    # for now just all cells with nutrient storage above minimum
-    nutrient_storage_channel = live_channels[config["physiology"]["channels"].index("nutrient_storage")]
-    return np.argwhere(nutrient_storage_channel > config["physiology"]["min_nutrient_storage"])
+def act(config, input, physiology):
+    return physiology(input)
 
 
 def perceive(config, cell, env_channels, live_channels):
@@ -180,18 +86,111 @@ def perceive(config, cell, env_channels, live_channels):
     return perception
 
 
-def act(config, input, physiology):
-    return physiology(input)
+def stoppage_condition_met(config, update_num, init_conditions):
+    if config["lifecycle"]["stoppage"]["condition"] == "iterations":
+        if init_conditions["num_iterations"] is None:
+            raise ValueError("Stoppage condition 'iterations' not initialized.")
+        return update_num > init_conditions["num_iterations"]
+    else:
+        raise ValueError(f"Stoppage condition {config['lifecycle']['stoppage']['condition']} not recognized.")
 
 
-def create_dumb_physiology(config):
-    perception_channels = config["physiology"]["perception_channels"]
-    actuators = config["physiology"]["actuators"]
+def init_stoppage_condition(config):
+    init_conditions = {}
+    if config["lifecycle"]["stoppage"]["condition"] == "iterations":
+        low = config["lifecycle"]["stoppage"]["stoppage_range"][0]
+        high = config["lifecycle"]["stoppage"]["stoppage_range"][1]
+        assert low < high, "Stoppage range must be increasing."
+        num_iterations = np.random.randint(low, high)
+        init_conditions["num_iterations"] = num_iterations
+    return init_conditions
 
-    def dumb_physiology(perception):
-        return np.random.random(len(actuators))
+
+def identify_cells_to_update(config, env_channels, live_channels):
+    # for now just all cells with storage above minimum
+    storage_channel = live_channels[config["physiology"]["channels"].index("storage")]
+    return np.argwhere(storage_channel > config["physics"]["min_storage"])
+
+
+def run_lifecycle(config, env_channels, live_channels, physiology):
+    """
+    Perform the main lifecycle loop.
+    """
+    init_conditions = init_stoppage_condition(config)
+
+    update_num = 0
+    while not stoppage_condition_met(config, update_num, init_conditions):
+        update_num += 1
+        cells_to_update = identify_cells_to_update(config, env_channels, live_channels)
+        
+        for cell in cells_to_update:
+            input = perceive(config, cell, env_channels, live_channels)
+            output = act(config, input, physiology)
+            apply_physics.apply_local_physics(config, cell, output, env_channels, live_channels) 
+        
+        # Visualization, if needed
+
+
+def inoculate_env(config, env_channels, live_channels):
+    obstacle_channel = env_channels[config["environment"]["channels"].index("obstacle")]
+    poison_channel = env_channels[config["environment"]["channels"].index("poison")]
+    food_channel = env_channels[config["environment"]["channels"].index("food")]
+
+    valid_positions = np.logical_not(np.logical_or(obstacle_channel, poison_channel))
     
-    return dumb_physiology
+    # Choose where to place based on configuration
+    if config["lifecycle"]["inoculation"]["where_to_place"] == "random":
+        candidates = np.argwhere(valid_positions)
+    elif config["lifecycle"]["inoculation"]["where_to_place"] == "on_food":
+        candidates = np.argwhere(np.logical_and(food_channel, valid_positions))
+    elif config["lifecycle"]["inoculation"]["where_to_place"] == "next_to_food":
+        # Get positions adjacent to food
+        kernel = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]])
+        adj_to_food = signal.convolve2d(food_channel, kernel, mode='same') > 0
+        candidates = np.argwhere(np.logical_and(adj_to_food, valid_positions))
+    else:
+        raise ValueError(f"Inoculation place method {config['lifecycle']['inoculation']['where_to_place']} not recognized.")
+
+    # Selection procedure (for now, just random. More can be added)
+    if config["lifecycle"]["inoculation"]["selection_procedure"] != "random":
+        raise ValueError(f"Selection procedure {config['lifecycle']['inoculation']['selection_procedure']} not implemented yet.")
+
+    selected_positions = candidates[np.random.choice(candidates.shape[0], config["lifecycle"]["inoculation"]["num_spores"], replace=False)]
+    
+    # Place the spores at selected_positions. More logic can be added to initialize spore properties like muscle, storage, etc.
+    for position in selected_positions:
+        # environment_matrix[some_spore_channel, position[0], position[1]] = some_initial_value
+        # set storage to 1
+        live_channels[config["physiology"]["channels"].index("storage"), position[0], position[1]] = 1
+
+
+def init_live_channels(config):
+    width = config["environment"]["width"]
+    height = config["environment"]["height"]
+    n_live_channels = len(config["physiology"]["channels"])
+    live_channels = np.zeros((n_live_channels, width, height))
+    return live_channels
+
+
+def load_check_config(config_file):
+    with open(config_file, 'r') as file:
+        config = yaml.load(file, Loader=yaml.FullLoader)
+        all_channels = config["environment"]["channels"] + config["physiology"]["channels"] + config["physiology"]["perception_channels"] + config["physiology"]["action_channels"]
+
+        # Ensure all perception and action channels exist
+        for channel in config["physiology"]["perception_channels"] + config["physiology"]["action_channels"]:
+            assert channel in all_channels, f"Channel {channel} not found in all_channels"
+            
+        return config
+    
+
+def simulate_lifecycle(config_file, env_channels, physiology):
+    config = load_check_config(config_file)
+    live_channels = init_live_channels(config)
+    inoculate_env(config, env_channels, live_channels)
+    run_lifecycle(config, env_channels, live_channels, physiology)
+    
+    return env_channels, live_channels
 
 
 env_channels = generate_env.generate_env("./ALife2023/config.yaml", visualize=True)
