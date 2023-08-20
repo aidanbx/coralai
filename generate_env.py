@@ -266,8 +266,10 @@ def generate_env(config_file, visualize=False):
     return env_channels
 
 
+# TEST: 0
+# ---------------
 env_channels = generate_env("./ALife2023/config.yaml", visualize=True)
-
+# ---------------
 
 # %% 
 

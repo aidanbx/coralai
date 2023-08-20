@@ -6,44 +6,17 @@ import matplotlib.pyplot as plt
 import yaml
 
 import importlib
+
 import generate_env
 importlib.reload(generate_env)
+
 import apply_physics
 importlib.reload(apply_physics)
+
 import visualize    
 importlib.reload(visualize)
 
-"""
-- Inoculate
-- All cells with storage present
-	- Perceive neighborhood of
-		- Obstacle
-		- Chemoattractant
-		- Chemorepellant
-		- ^ environment; v life
-		- Muscle
-		- Cytoplasm density/fill
-		- Storage
-		- Communication channels
-	- Generate desired
-		- Storage delta
-		- Muscle contraction and
-		- Reservoir gate open percentages
-			- From my store, what percentage to give to (softmax)
-				- left,right,up,down
-		- Communication channels
-- Apply Physics
-- Repeat until stoppage parameter (config)
-- Measure reproduction metric after iterations or weather cycle:
-	- Amount of converted energy
-		- Total volume of cytoplasm in your genome
-	- Spore production
-		- Given a signal, maximize cytoplasm volume
-
-Cells decide where to shed cytoplasm by contracting their reservoirs, this is already described.
-Cytoplasm can flow into empty space (every cell is capable of carrying 1 or fewer units of cytoplasm,
-even if it has no muscle to pump it.
-"""
+# ----------------
 
 def create_dumb_physiology(config):
     perception_channels = config["physiology"]["perception_channels"]
@@ -192,12 +165,15 @@ def simulate_lifecycle(config_file, env_channels, physiology):
     
     return env_channels, live_channels
 
-
+# TEST: 0
+# ---------------
 env_channels = generate_env.generate_env("./ALife2023/config.yaml", visualize=True)
 config = load_check_config("./ALife2023/config.yaml")
 live_channels = init_live_channels(config)
 inoculate_env(config, env_channels, live_channels)
 run_lifecycle(config, env_channels, live_channels, create_dumb_physiology(config))
+# ---------------
+
 
 # %%
 # KERNEL PLAYGROUND
@@ -219,4 +195,37 @@ world = signal.convolve2d(world, kernel, mode='same')
 
 visualize.show_image(visualize.channel_to_image(world, cmap="viridis"))
 
+
+
+"""
+- Inoculate
+- All cells with storage present
+	- Perceive neighborhood of
+		- Obstacle
+		- Chemoattractant
+		- Chemorepellant
+		- ^ environment; v life
+		- Muscle
+		- Cytoplasm density/fill
+		- Storage
+		- Communication channels
+	- Generate desired
+		- Storage delta
+		- Muscle contraction and
+		- Reservoir gate open percentages
+			- From my store, what percentage to give to (softmax)
+				- left,right,up,down
+		- Communication channels
+- Apply Physics
+- Repeat until stoppage parameter (config)
+- Measure reproduction metric after iterations or weather cycle:
+	- Amount of converted energy
+		- Total volume of cytoplasm in your genome
+	- Spore production
+		- Given a signal, maximize cytoplasm volume
+
+Cells decide where to shed cytoplasm by contracting their reservoirs, this is already described.
+Cytoplasm can flow into empty space (every cell is capable of carrying 1 or fewer units of cytoplasm,
+even if it has no muscle to pump it.
+"""
 # %%
