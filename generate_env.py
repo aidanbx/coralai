@@ -1,4 +1,6 @@
-# %%
+
+
+# %% 
 from matplotlib import animation
 import numpy as np
 import noise
@@ -13,7 +15,14 @@ import importlib
 import visualize
 importlib.reload(visualize)
 
+import tester
+importlib.reload(tester)
 
+
+if __name__ == "__main__":
+    verbose = True # For testing
+
+# %% 
 def remove_overlap(config, env_channels):
     food_channel = env_channels[config["environment"]["channels"].index("food")]
     poison_channel = env_channels[config["environment"]["channels"].index("poison")]
@@ -227,120 +236,105 @@ def visualize_env(config_file, env_channels):
     ])
 
     return visualize.collate_channel_images(vis_config, new_images)
-    # super_image = 
-    # visualize.show_image(super_image)
 
 
-def load_check_config(config_file):
-    with open(config_file) as file:
-        config = yaml.load(file, Loader=yaml.FullLoader)
-        # asserts alpha and beta are in their proper ranges
-        # For food_generation_params
-        assert 0 < config["environment"]["food_generation_params"]["alpha"][0] <= 2
-        assert config["environment"]["food_generation_params"]["alpha"][1] <= 2
-        assert -1 <= config["environment"]["food_generation_params"]["beta"][0] <= 1
-        assert -1 <= config["environment"]["food_generation_params"]["beta"][1] <= 1
+def load_check_config(config_object):
+    
+    if isinstance(config_object, str):
+        with open(config_object) as file:
+            config = yaml.load(file, Loader=yaml.FullLoader)
+    elif isinstance(config_object, dict):
+        config = config_object
+    else:
+        raise TypeError("config_object must be either a path (str) or a config (dict)")
 
-        # For poison_generation_params
-        assert 0 < config["environment"]["poison_generation_params"]["alpha"][0] <= 2
-        assert config["environment"]["poison_generation_params"]["alpha"][1] <= 2
-        assert -1 <= config["environment"]["poison_generation_params"]["beta"][0] <= 1
-        assert -1 <= config["environment"]["poison_generation_params"]["beta"][1] <= 1
+    # asserts alpha and beta are in their proper ranges
+    # For food_generation_params
+    assert 0 < config["environment"]["food_generation_params"]["alpha"][0] <= 2
+    assert config["environment"]["food_generation_params"]["alpha"][1] <= 2
+    assert -1 <= config["environment"]["food_generation_params"]["beta"][0] <= 1
+    assert -1 <= config["environment"]["food_generation_params"]["beta"][1] <= 1
 
-        return config
+    # For poison_generation_params
+    assert 0 < config["environment"]["poison_generation_params"]["alpha"][0] <= 2
+    assert config["environment"]["poison_generation_params"]["alpha"][1] <= 2
+    assert -1 <= config["environment"]["poison_generation_params"]["beta"][0] <= 1
+    assert -1 <= config["environment"]["poison_generation_params"]["beta"][1] <= 1
+
+    return config
 
 
-def generate_env(config_file, visualize=False):
-    config = load_check_config(config_file)
+def generate_env(config_object, visualize=False):
+    config = load_check_config(config_object)
     env_channels = init_env_channels(config)
     populate_env_channels(config, env_channels)
     remove_overlap(config, env_channels)
-    populate_chemoattractant(config, env_channels)
-    populate_chemorepellant(config, env_channels)
+    # populate_chemoattractant(config, env_channels)
+    # populate_chemorepellant(config, env_channels)
     remove_overlap(config, env_channels)
 
     if visualize:
-        return env_channels, visualize_env(config_file, env_channels)
+        return env_channels, visualize_env(config_object, env_channels)
     return env_channels
 
-# %% 
 
+# %% Test Generate Env
 if __name__ == "__main__":
-    # TEST: 0
-    # Does it create and show the environment
-    env_channels, img = generate_env("./config.yaml", visualize=True)
-    visualize.show_image(img)
+    yaml_config = """
+environment:
+  width: 100
+  height: 100
+  boundary_condition: "torus"
+  channels: 
+    - "food"
+    - "poison"
+    - "obstacle"
+    - "chemoattractant"
+    - "chemorepellant"
 
-    # TEST: 1
-    # Is the poison and food diffused correctly
-    pass 
+  food_generation: "levy_dust"
+  food_generation_params:
+    pad: [0, 5] # these are ranges, low high
+    alpha: [0.1, 2]
+    beta: [-1, 1] 
+    num_food: [50, 500]
 
-    # TEST: 2
-    # Visualize range of possible maps - generate 20 and display them in a grid
-    fig, ax = plt.subplots(4, 5, figsize=(15, 6))  # 5x4 grid of plots for 20 combinations
+  poison_generation: "levy_dust"
+  poison_generation_params:
+    pad: [0, 5]
+    alpha: [0.1, 2]
+    beta: [-1, 1]
+    num_poison: [20, 200]
 
-    for i in range(4):
-        for j in range(5):
-            env_channels, img = generate_env("./config.yaml", visualize=True)
-            ax[i, j].imshow(img)
-            ax[i, j].axis('off')
+  obstacle_generation: "perlin_noise"
+  obstacle_generation_params:
+    threshold: [0.05, 0.2]
+    frequency: [4.0, 16.0]
+    octaves: [1, 4]
+    persistence: [0.25, 1.0]
+    lacunarity: [1.5, 3.0]
 
-    plt.tight_layout()
-    plt.show()
+  chemoattractant_params:
+    iterations: 300
+    dropoff: 1
+    
+  chemorepellant_params:
+    iterations: 300
+    dropoff: 1
 
-
-# %% 
-
-# # Tests diffusion
-
-# channel = np.zeros((100, 100))
-# channel[50, 45] = 10
-# channel[50, 51] = 1
-# channel[50, 52] = 1
-
-# channel [20, 20] = 1
-
-
-# obstacle_channel = np.zeros((100, 100))
-# obstacle_channel[45, 50] = 1
-# obstacle_channel[45, 51] = 1
-# obstacle_channel[45, 52] = 1
-
-# obstacle_channel[20, 20] = 1
-
-# diffused_channel = diffuse_chemical(channel, obstacle_channel, 300, 0.5)
-
-# # plots just the diffused channel
-# plt.imshow(diffused_channel, cmap='hot')
-
-
+visualize:
+  colormaps:
+    food: "Greens"
+    poison: "Oranges"
+    obstacle: "binary"
+    chemoattractant: "Greens"
+    chemorepellant: "Oranges"
+  chemo_alpha: 0.9
+"""
+    config = yaml.safe_load(yaml_config)
+    tester.test(lambda: generate_env(config, visualize=True),
+                "Generate Environment",
+                verbose,
+                lambda result, title: visualize.show_image(result[1]))
+        
 # %%
-
-# def visualize_levy_dust(shape, points, pad):
-#     fig, ax = plt.subplots(8, 8, figsize=(15, 15))  # 5x4 grid of plots for 20 combinations
-
-#     alphas = np.linspace(0.1, 2, 8)  # Sample 5 values of alpha from 0.1 to 2
-#     betas = np.linspace(-1, 1, 8)    # Sample 4 values of beta from -1 to 1
-
-#     for i, alpha in enumerate(alphas):
-#         for j, beta in enumerate(betas):
-#             channel = np.zeros(shape)
-#             dust = levy_dust(shape, points, alpha, beta, pad)
-#             discretize_levy_dust(dust, channel, pad)
-            
-#             ax[i, j].imshow(channel, cmap='binary')
-#             ax[i, j].set_title(f"α = {alpha:.2f}, β = {beta:.2f}")
-#             ax[i, j].axis('off')
-
-#     plt.tight_layout()
-#     plt.show()
-
-# # Parameters
-# shape = (100, 100)
-# points = 500
-# pad = 5
-
-# visualize_levy_dust(shape, points, pad)
-
-# %%
-

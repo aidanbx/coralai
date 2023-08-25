@@ -184,16 +184,22 @@ visualize:
     poison: "summer"
     obstacle: "binary"
 """
-def load_check_config(config_file):
-    with open(config_file) as file:
-        config = yaml.load(file, Loader=yaml.FullLoader)
-        # asserts colormaps are of right length
-        assert len(config["visualize"]["colormaps"]) == len(config["environment"]["channels"])
-        # asserts colormaps are real matplotlib colormaps
-        for cmap in config["visualize"]["colormaps"].values():
-            assert cmap in plt.colormaps()
+def load_check_config(config_object):
+    if isinstance(config_object, str):
+        with open(config_object) as file:
+            config = yaml.load(file, Loader=yaml.FullLoader)
+    elif isinstance(config_object, dict):
+        config = config_object
+    else:
+        raise TypeError("config_object must be either a path (str) or a config (dict)")
+    
+    # asserts colormaps are of right length
+    assert len(config["visualize"]["colormaps"]) == len(config["environment"]["channels"])
+    # asserts colormaps are real matplotlib colormaps
+    for cmap in config["visualize"]["colormaps"].values():
+        assert cmap in plt.colormaps()
 
-        return config
+    return config
 
 # %%
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ environment:
 
   food_generation: "levy_dust"
   food_generation_params:
-    pad: [0, 5]
+    pad: [0, 5] # these are ranges, low high
     alpha: [0.1, 2]
     beta: [-1, 1] 
     num_food: [50, 500]
