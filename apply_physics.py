@@ -1,14 +1,6 @@
 # %%
 import yaml
 
-import importlib
-
-import generate_env
-importlib.reload(generate_env)
-
-import simulate_lifecycle
-importlib.reload(simulate_lifecycle)
-
 def ensure_min_storage(config, cell, live_channels):
     storage_on_cell = live_channels[config["physiology"]["channels"].index("storage")][cell[0], cell[1]]
     cytoplasm_on_cell = live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]]
@@ -50,19 +42,29 @@ def apply_local_physics(config, cell, actuators, env_channels, live_channels):
     delegate_cytoplasm()
 
 
-# TEST: 0
-# ---------------
-env_channels = generate_env.generate_env("./ALife2023/config.yaml", visualize=True)
-config = load_check_config("./ALife2023/config.yaml")
-live_channels = init_live_channels(config)
-cells_to_update = identify_cells_to_update(config, env_channels, live_channels)
-cell = cells_to_update[0]
-input = perceive(config, cell, env_channels, live_channels)
+if __name__ == "__main__":
+    import importlib
+    import simulate_lifecycle as life
+    importlib.reload(life)
+    import generate_env as genv
+    importlib.reload(genv)
+    # TEST: 0
+    # ---------------
 
-physiology = create_dumb_physiology(config)
-output = act(config, input, physiology)
-apply_local_physics(config, cell, output, env_channels, live_channels)   
-# ---------------
+    env_channels = genv.generate_env("./config.yaml", visualize=True)
+    lifecycle_config = life.load_check_config("./config.yaml")
+    live_channels = life.init_live_channels(lifecycle_config)
+    cells_to_update = life.identify_cells_to_update(lifecycle_config, env_channels, live_channels)
+    life.inoculate_env(lifecycle_config, env_channels, live_channels)
+    cell = cells_to_update[0]
+    input = life.perceive(lifecycle_config, cell, env_channels, live_channels)
+
+    physiology = life.create_dumb_physiology(lifecycle_config)
+
+    output = life.act(lifecycle_config, input, physiology)
+
+    apply_local_physics(lifecycle_config, cell, output, env_channels, live_channels)   
+    # ---------------
 
 
 """

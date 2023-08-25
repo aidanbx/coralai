@@ -1,6 +1,4 @@
-
-
-# %% 
+# %%
 from matplotlib import animation
 import numpy as np
 import noise
@@ -15,7 +13,7 @@ import importlib
 import visualize
 importlib.reload(visualize)
 
-# %% 
+
 def remove_overlap(config, env_channels):
     food_channel = env_channels[config["environment"]["channels"].index("food")]
     poison_channel = env_channels[config["environment"]["channels"].index("poison")]
@@ -180,9 +178,9 @@ def populate_env_channels(config, env_channels):
         elif ch == "obstacle":
             populate_obstacle(config, channel)
         elif ch == "chemoattractant":
-            pass
+            populate_chemoattractant(config, env_channels)
         elif ch == "chemorepellant":
-            pass
+            populate_chemorepellant(config, env_channels)
         else:
             raise ValueError(f"Channel {ch} not recognized.")
     return env_channels
@@ -228,8 +226,9 @@ def visualize_env(config_file, env_channels):
         blended_image,
     ])
 
-    super_image = visualize.collate_channel_images(vis_config, new_images)
-    visualize.show_image(super_image)
+    return visualize.collate_channel_images(vis_config, new_images)
+    # super_image = 
+    # visualize.show_image(super_image)
 
 
 def load_check_config(config_file):
@@ -248,7 +247,6 @@ def load_check_config(config_file):
         assert -1 <= config["environment"]["poison_generation_params"]["beta"][0] <= 1
         assert -1 <= config["environment"]["poison_generation_params"]["beta"][1] <= 1
 
-
         return config
 
 
@@ -262,14 +260,34 @@ def generate_env(config_file, visualize=False):
     remove_overlap(config, env_channels)
 
     if visualize:
-        visualize_env(config_file, env_channels)
+        return env_channels, visualize_env(config_file, env_channels)
     return env_channels
 
+# %% 
 
-# TEST: 0
-# ---------------
-env_channels = generate_env("./ALife2023/config.yaml", visualize=True)
-# ---------------
+if __name__ == "__main__":
+    # TEST: 0
+    # Does it create and show the environment
+    env_channels, img = generate_env("./config.yaml", visualize=True)
+    visualize.show_image(img)
+
+    # TEST: 1
+    # Is the poison and food diffused correctly
+    pass 
+
+    # TEST: 2
+    # Visualize range of possible maps - generate 20 and display them in a grid
+    fig, ax = plt.subplots(4, 5, figsize=(15, 6))  # 5x4 grid of plots for 20 combinations
+
+    for i in range(4):
+        for j in range(5):
+            env_channels, img = generate_env("./config.yaml", visualize=True)
+            ax[i, j].imshow(img)
+            ax[i, j].axis('off')
+
+    plt.tight_layout()
+    plt.show()
+
 
 # %% 
 
