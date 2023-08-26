@@ -47,7 +47,7 @@ visualize:
     obstacle: "binary"
     chemoattractant: "Greens"
     chemorepellant: "Oranges"
-  chemo_alpha: 0.9
+  chemo_alpha: 2
 
 interactive_sim:
   enable: true

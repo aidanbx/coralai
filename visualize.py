@@ -14,8 +14,10 @@ import importlib
 import tester 
 importlib.reload(tester)
 
+# %% --------------------------------------------------------------------------
 if __name__ == "__main__":
     verbose = True # For testing
+# %% --------------------------------------------------------------------------
 
 
 def blend_colors(color1, color2, weight):
@@ -35,7 +37,8 @@ def blend_colors(color1, color2, weight):
 
     return blended_rgb
 
-# %% Test Blend Color
+# Test Blend Color
+# %% --------------------------------------------------------------------------
 if __name__ == "__main__":
     # Test blend colors
     color1 = (1.0, 0, 0)
@@ -61,7 +64,7 @@ if __name__ == "__main__":
                 "Blend colors",
                 verbose,
                 show_blend_result)
-# %%
+# %% --------------------------------------------------------------------------
     
 
 def show_image(image, ax=None):
@@ -80,6 +83,7 @@ def channel_to_image(channel, cmap="gray"):
 
 
 # %% Test Channel to Image
+# %% --------------------------------------------------------------------------
 if __name__ == "__main__":
     channel = np.array([
         [0, 0, 0.25],
@@ -90,7 +94,7 @@ if __name__ == "__main__":
                 "Channel to Image",
                 verbose,
                 lambda result, title: show_image(result))
-# %%
+# %% --------------------------------------------------------------------------
 
 
 def channels_to_images(config, channels, colormaps=None):
@@ -112,7 +116,8 @@ def show_images_result(result, title):
         show_image(image)
 
 
-# %% Test Channels to Images
+# Test Channels to Images
+# %% --------------------------------------------------------------------------
 if __name__ == "__main__":
     config = {
         "environment": {
@@ -138,7 +143,21 @@ if __name__ == "__main__":
                 "Channels to Images",
                 verbose,
                 show_images_result)
-# %%
+# %% --------------------------------------------------------------------------
+
+# In the order provided, stacks images on top of each other (first is the background)
+# Makes alpha 0 for overlapping pixels (so the top image is visible, taking precedence)
+def stack_mask_images(images):
+    super_image = np.zeros((images.shape[1], images.shape[2], 4))
+
+    for img in images:
+        # Mask for the current channel where its value is greater than 0
+        mask = img[..., 3] > 0
+        # Set the super image to the current image where the mask is true
+        super_image[mask] = img[mask]
+
+    return super_image
+
 
 def collate_channel_images(config, images):
     super_image = np.zeros((images.shape[1], images.shape[2], 4))
@@ -149,7 +168,8 @@ def collate_channel_images(config, images):
 
     return super_image
 
-# %% Test Collate Channel Images
+# Test Collate Channel Images
+# %% --------------------------------------------------------------------------
 if __name__ == "__main__":
     config = {
         "environment": {
@@ -165,7 +185,7 @@ if __name__ == "__main__":
     }
     channels = np.array([
             [[0.2, 0, 0], [0.8, 1, 0]],   # food channel
-            [[0, 0, 0], [0.1, 0.3, 1]],     # poison channel
+            [[0, 0, 0], [0.1, 0, 1]],     # poison channel
             [[0, 1, 1], [0, 0, 0]]              # obstacle channel, binary
         ])
     images = channels_to_images(config, channels)
@@ -175,7 +195,8 @@ if __name__ == "__main__":
                 "Collate Channel Images",
                 verbose,
                 lambda result, title: show_image(result))
-# %% 
+# %%  -------------------------------------------------------------------------
+
 
 """
 visualize:
@@ -201,10 +222,11 @@ def load_check_config(config_object):
 
     return config
 
-# %%
+# Test Load Check Config
+# %% --------------------------------------------------------------------------
 if __name__ == "__main__":
     tester.test(lambda:
                 load_check_config("./config.yaml"),
                 "Load and check the configuration",
                 verbose)
-# %%
+# %% --------------------------------------------------------------------------

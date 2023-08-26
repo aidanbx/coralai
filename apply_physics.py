@@ -35,11 +35,11 @@ def check_config(config):
 
 def apply_local_physics(config, cell, actuators, env_channels, live_channels):
     check_config(config)
-    absorb_convert_food(config, cell, env_channels, live_channels)
-    exchange_muscle(config, cell, actuators, live_channels)
-    exchange_storage(config, cell, actuators, live_channels)
-    contract_muscle(config, cell, actuators, env_channels, live_channels)
-    delegate_cytoplasm()
+    # absorb_convert_food(config, cell, env_channels, live_channels)
+    # exchange_muscle(config, cell, actuators, live_channels)
+    # exchange_storage(config, cell, actuators, live_channels)
+    # contract_muscle(config, cell, actuators, env_channels, live_channels)
+    # delegate_cytoplasm()
 
 
 if __name__ == "__main__":
