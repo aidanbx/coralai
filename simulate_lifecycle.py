@@ -10,7 +10,6 @@ import importlib
 import apply_physics
 importlib.reload(apply_physics)
 
-# ----------------
 
 def create_dumb_physiology(config):
     perception_channels = config["physiology"]["perception_channels"]

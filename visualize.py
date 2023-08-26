@@ -14,12 +14,47 @@ import importlib
 import tester 
 importlib.reload(tester)
 
-# %% --------------------------------------------------------------------------
+# %% Load Config---------------------------------------------------------------
+def load_check_config(config_object):
+    if isinstance(config_object, str):
+        with open(config_object) as file:
+            config = yaml.load(file, Loader=yaml.FullLoader)
+    elif isinstance(config_object, dict):
+        config = config_object
+    else:
+        raise TypeError("config_object must be either a path (str) or a config (dict)")
+    
+    # asserts colormaps are of right length
+    assert len(config["visualize"]["colormaps"]) == len(config["environment"]["channels"])
+    # asserts colormaps are real matplotlib colormaps
+    for cmap in config["visualize"]["colormaps"].values():
+        assert cmap in plt.colormaps()
+
+    return config
+
 if __name__ == "__main__":
     verbose = True # For testing
-# %% --------------------------------------------------------------------------
+    channels = np.array([
+            [[0.2, 0, 0], [0.8, 1, 0]],   # food channel
+            [[0, 0, 0], [0.1, 0, 1]],     # poison channel
+            [[0, 1, 1], [0, 0, 0]]        # obstacle channel, binary
+        ])
+    config = {
+        "environment": {
+            "channels": ["food", "poison", "obstacle"]
+        },
+        "visualize": {
+            "colormaps": {
+                "food": "Greens",
+                "poison": "Oranges",
+                "obstacle": "binary"
+            }
+        }
+    }
+    config = load_check_config(config)
 
 
+# %% Blend Colors--------------------------------------------------------------
 def blend_colors(color1, color2, weight):
     # Convert RGB colors to HSV
     hsv1 = colorsys.rgb_to_hsv(*color1)
@@ -37,8 +72,6 @@ def blend_colors(color1, color2, weight):
 
     return blended_rgb
 
-# Test Blend Color
-# %% --------------------------------------------------------------------------
 if __name__ == "__main__":
     # Test blend colors
     color1 = (1.0, 0, 0)
@@ -64,9 +97,8 @@ if __name__ == "__main__":
                 "Blend colors",
                 verbose,
                 show_blend_result)
-# %% --------------------------------------------------------------------------
     
-
+# %% Show Image, Show Images, Channel to Image---------------------------------
 def show_image(image, ax=None):
     if ax is None:
         fig, ax = plt.subplots()
@@ -76,27 +108,32 @@ def show_image(image, ax=None):
     return ax
 
 
+def show_images(images, columns=3):
+    n = len(images)
+    rows = n // columns
+    rows += n % columns
+    position = range(1, n + 1)
+    fig = plt.figure(figsize=(20, 20))
+    for k, image in zip(position, images):
+        ax = fig.add_subplot(rows, columns, k)
+        ax.imshow(image)
+        plt.axis('off')
+    plt.show()
+
+
 def channel_to_image(channel, cmap="gray"):
     norm = mpl.colors.Normalize(channel.min(), channel.max())
     m = cm.ScalarMappable(norm=norm, cmap=cmap)
     return m.to_rgba(channel)
 
-
-# %% Test Channel to Image
-# %% --------------------------------------------------------------------------
 if __name__ == "__main__":
-    channel = np.array([
-        [0, 0, 0.25],
-        [1, 0.5, 0],
-        [0, 1, 0]
-    ])
-    tester.test(lambda: channel_to_image(channel, "copper"),
+
+    tester.test(lambda: channel_to_image(channels[0], "copper"),
                 "Channel to Image",
                 verbose,
-                lambda result, title: show_image(result))
-# %% --------------------------------------------------------------------------
+                lambda result, title: show_image(result))  
 
-
+# %% Channels to Images -------------------------------------------------------
 def channels_to_images(config, channels, colormaps=None):
     if colormaps is None:
         # food, poison, obstacle
@@ -111,122 +148,32 @@ def channels_to_images(config, channels, colormaps=None):
   
     return images
 
-def show_images_result(result, title):
-    for image in result:
-        show_image(image)
-
-
-# Test Channels to Images
-# %% --------------------------------------------------------------------------
 if __name__ == "__main__":
-    config = {
-        "environment": {
-            "channels": ["food", "poison", "obstacle"]
-        },
-        "visualize": {
-            "colormaps": {
-                "food": "Greens",
-                "poison": "Oranges",
-                "obstacle": "binary"
-            }
-        }
-    }
-    channels = np.array([
-        [[0.2, 0.4, 0.6], [0.8, 0.7, 0]],   # food channel
-        [[0, 0.7, 0.9], [0.1, 0.3, 0]],     # poison channel
-        [[1, 1, 1], [0, 0, 0]]              # obstacle channel, binary
-    ])
-
-        # print("\033[93mResult of test", title, ":", result, "\033[0m")
-
     tester.test(lambda: channels_to_images(config, channels),
                 "Channels to Images",
                 verbose,
-                show_images_result)
-# %% --------------------------------------------------------------------------
+                lambda result, t: show_images(result))
 
-# In the order provided, stacks images on top of each other (first is the background)
-# Makes alpha 0 for overlapping pixels (so the top image is visible, taking precedence)
-def stack_mask_images(images):
-    super_image = np.zeros((images.shape[1], images.shape[2], 4))
-
-    for img in images:
-        # Mask for the current channel where its value is greater than 0
-        mask = img[..., 3] > 0
-        # Set the super image to the current image where the mask is true
-        super_image[mask] = img[mask]
-
+# %% Visualize Stacked Channels -----------------------------------------------
+def visualize_stacked_channels(config, channels):
+    # In the order provided, stacks images on top of each other (first is the background)
+    # Makes alpha 0 for overlapping pixels (so the top image is visible, taking precedence)
+    images = channels_to_images(config, channels, config["visualize"]["colormaps"].values())
+    super_image = None
+    for i in range(len(images)):
+        if super_image is None:
+            super_image = images[i]
+        else:
+            # Mask for the current channel where its value is greater than 0
+            mask = channels[i] > 0
+            # Set the super image to the current image where the mask is true
+            super_image[mask] = images[i][mask]
+    
     return super_image
 
-
-def collate_channel_images(config, images):
-    super_image = np.zeros((images.shape[1], images.shape[2], 4))
-
-    for img in images:
-        # Mask for the current channel where its value is greater than 0
-       super_image[img[..., 3] > 0] = img[img[..., 3] > 0]
-
-    return super_image
-
-# Test Collate Channel Images
-# %% --------------------------------------------------------------------------
 if __name__ == "__main__":
-    config = {
-        "environment": {
-            "channels": ["food", "poison", "obstacle"]
-        },
-        "visualize": {
-            "colormaps": {
-                "food": "Greens",
-                "poison": "Oranges",
-                "obstacle": "binary"
-            }
-        }
-    }
-    channels = np.array([
-            [[0.2, 0, 0], [0.8, 1, 0]],   # food channel
-            [[0, 0, 0], [0.1, 0, 1]],     # poison channel
-            [[0, 1, 1], [0, 0, 0]]              # obstacle channel, binary
-        ])
-    images = channels_to_images(config, channels)
-    show_images_result(images, "Channels to Images")
-
-    tester.test(lambda: collate_channel_images(config, np.array(channels_to_images(config, channels))),
-                "Collate Channel Images",
+    show_images(channels_to_images(config, channels))
+    tester.test(lambda: visualize_stacked_channels(config, channels),
+                "Visualize Stacked Channels",
                 verbose,
                 lambda result, title: show_image(result))
-# %%  -------------------------------------------------------------------------
-
-
-"""
-visualize:
-  colormaps:
-    food: "copper"
-    poison: "summer"
-    obstacle: "binary"
-"""
-def load_check_config(config_object):
-    if isinstance(config_object, str):
-        with open(config_object) as file:
-            config = yaml.load(file, Loader=yaml.FullLoader)
-    elif isinstance(config_object, dict):
-        config = config_object
-    else:
-        raise TypeError("config_object must be either a path (str) or a config (dict)")
-    
-    # asserts colormaps are of right length
-    assert len(config["visualize"]["colormaps"]) == len(config["environment"]["channels"])
-    # asserts colormaps are real matplotlib colormaps
-    for cmap in config["visualize"]["colormaps"].values():
-        assert cmap in plt.colormaps()
-
-    return config
-
-# Test Load Check Config
-# %% --------------------------------------------------------------------------
-if __name__ == "__main__":
-    tester.test(lambda:
-                load_check_config("./config.yaml"),
-                "Load and check the configuration",
-                verbose)
-# %% --------------------------------------------------------------------------

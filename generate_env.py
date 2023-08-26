@@ -203,40 +203,8 @@ def init_env_channels(config):
     return env_channels
 
 
-def visualize_env(config_file, env_channels):    
-    vis_config = visualize.load_check_config(config_file)
-
-    food_index = vis_config["environment"]["channels"].index("food")
-    poison_index = vis_config["environment"]["channels"].index("poison")
-    obstacle_index = vis_config["environment"]["channels"].index("obstacle")
-
-    images = visualize.channels_to_images(vis_config, env_channels)
-
-    chemoattractant_image = images[vis_config["environment"]["channels"].index("chemoattractant")]
-    chemorepellant_image = images[vis_config["environment"]["channels"].index("chemorepellant")]
-    blended_image = 0.5 * (chemoattractant_image + chemorepellant_image)
-    blended_image[...,3] = vis_config["visualize"]["chemo_alpha"]
-    blended_image[(env_channels[obstacle_index] > 0), 3] = 0
-    blended_image[(env_channels[poison_index] > 0), 3] = 0
-    blended_image[(env_channels[food_index] > 0), 3] = 0
-
-    images[food_index][env_channels[food_index] == 0, 3] = 0
-    images[poison_index][env_channels[poison_index] == 0, 3] = 0
-    images[obstacle_index][env_channels[obstacle_index] == 0, 3] = 0
-    
-    # for image in images:
-    #     visualize.show_image(image)
-    # visualize.show_image(blended_image)
-
-    new_images = np.array([
-        images[vis_config["environment"]["channels"].index("obstacle")],
-        images[vis_config["environment"]["channels"].index("food")],
-        images[vis_config["environment"]["channels"].index("poison")],
-        blended_image,
-    ])
-
-    return visualize.collate_channel_images(vis_config, new_images)
-
+def visualize_env(config_file, env_channels):
+    return visualize.visualize_stacked_channels(config, env_channels)
 
 def load_check_config(config_object):
     
