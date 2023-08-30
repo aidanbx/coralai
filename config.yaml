@@ -108,7 +108,7 @@ physiology:
   
 
   perception_kernel:
-    kernel_type: "moore"
+    kernel_type: "moore" # FIND A KERNEL THAT WORKS WITH HEXAGONS, other than 1/6 everything?
     kernel_radius: 1
 
 physics:

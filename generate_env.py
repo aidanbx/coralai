@@ -22,6 +22,8 @@ importlib.reload(tester)
 if __name__ == "__main__":
     verbose = True # For testing
 
+# LINES TO FOCUS ON FOR CHANGING TO WORK WITH HEXAGONAL MAP ----------------------------------------------------------
+
 # %% 
 def remove_overlap(config, env_channels):
     food_channel = env_channels[config["environment"]["channels"].index("food")]
@@ -45,12 +47,13 @@ def diffuse_chemical(channel, obstacle_channel, iterations, dropoff=0.5):
     # iterations decide how much the chemical spreads out
     for _ in range(iterations):
         # Using convolution for averaging neighboring cells
+        kernel = np.array([dropoff/1.])
         kernel = np.array([
-            [dropoff/1.4, dropoff, dropoff/1.4],
+            [dropoff/1.4, dropoff, dropoff/1.4], # CHANGE KERNEL ------------------------------------------------------------
             [dropoff,     1,       dropoff],
             [dropoff/1.4, dropoff, dropoff/1.4]
         ])
-        new_channel = signal.convolve2d(channel, kernel, mode='same', boundary='wrap')
+        new_channel = signal.convolve2d(channel, kernel, mode='same', boundary='wrap') # CHANGE FUNCTION? ------------------------------------------------------------
         
         # Ensure obstacles do not participate in diffusion
         new_channel[obstacle_channel > 0] = 0
@@ -105,7 +108,7 @@ def levy_dust(shape: tuple, points: int, alpha: float, beta: float, pad: int = 0
     x = np.cumsum(step_length * np.cos(angle)) % (shape[0] - pad)
     y = np.cumsum(step_length * np.sin(angle)) % (shape[1] - pad)
 
-    return np.array([x, y])
+    return np.array([x, y]) # CHANGE --------------------------------------------------------------------
 
 
 def populate_obstacle(config, channel):
@@ -250,8 +253,7 @@ def generate_env(config_object, visualize=False):
 if __name__ == "__main__":
     yaml_config = """
 environment:
-  width: 100
-  height: 100
+  radius = 20
   boundary_condition: "torus"
   channels: 
     - "food"
@@ -264,6 +266,7 @@ environment:
   food_generation_params:
     pad: [0, 5] # these are ranges, low high
     alpha: [0.1, 2]
+    
     beta: [-1, 1] 
     num_food: [50, 500]
 
@@ -306,3 +309,4 @@ visualize:
                 lambda result, title: visualize.show_image(result[1]))
         
 # %%
+
