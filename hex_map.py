@@ -71,8 +71,8 @@ def update_screen(screen, grid):
 
 def hexagon_clicked(mouse_pos, grid):
     # Convert pygame coordinates to hexagon in HexagonGrid
-    offset_x = mouse_pos[0] - (SCREEN_WIDTH / 2)
-    offset_y = mouse_pos[1] - (SCREEN_HEIGHT / 2)
+    offset_x = mouse_pos[0] - (SCREEN_WIDTH / 3.2)
+    offset_y = mouse_pos[1] - (SCREEN_HEIGHT / 4)
     col = int(offset_x / (3/2 * HEXAGON_SIZE))
     row = int((offset_y - (col % 2) * HEXAGON_SIZE / 2) / HEXAGON_SIZE)
 
