@@ -3,7 +3,7 @@ from Hexagon import *
 
 COLOR_OPTIONS = [OFF_WHITE, OBSTACLE_BLACK, FOOD_GREEN, CHEMOATTRACTANT_YELLOW, POISON_PURPLE, CHEMOREPELLENT_RED]
 
-HEXAGON_SIZE = 20
+HEXAGON_SIZE = 20 # Distance from center of hexagon to edge? Probably
 GRID_WIDTH = 10
 GRID_HEIGHT = 10
 
@@ -67,34 +67,22 @@ def update_screen(screen, hexagons):
     return screen
 
 
-def point_in_polygon(point, vertices):
-    # Check if a point is inside a polygon using ray casting algorithm
-    x, y = point
-    is_inside = False
-    j = len(vertices) - 1
-    for i in range(len(vertices)):
-        if ((vertices[i][1] > y) != (vertices[j][1] > y)) and (x < (vertices[j][0] - vertices[i][0]) * (y - vertices[i][1]) / (vertices[j][1] - vertices[i][1]) + vertices[i][0]):
-            is_inside = not is_inside
-        j = i
-    return is_inside
-
-
-def hexagon_clicked(mouse_pos, hexagons):
+def hexagon_clicked(mouse_pos, grid):
     # Convert pygame coordinates to hexagon in HexagonGrid
     shifted_mouse_pos = (mouse_pos[0] - SCREEN_WIDTH / 2, mouse_pos[1] - SCREEN_HEIGHT / 2)
-    
-    for row in hexagons:
-        for hexagon in row:
-            if point_in_polygon(shifted_mouse_pos, hexagon.vertices):
-                return hexagon
-    
+    hex_x = shifted_mouse_pos[0] // 100 + grid.width # WHY IS IT 100? DEBUG THIS JOHN
+    hex_y = shifted_mouse_pos[1] // 100 + grid.height
+
+    print(hex_x, hex_y)
+
+    if hex_x in range(grid.width) and hex_y in range(grid.height):
+        return grid.grid[hex_x][hex_y]
     return None
     
 
 def main():
     global selected_color
     grid = HexagonGrid(GRID_WIDTH, GRID_HEIGHT)
-    hexagons = grid.grid
 
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     clock = pygame.time.Clock()
@@ -102,21 +90,19 @@ def main():
     running = True
     while running:
         for event in pygame.event.get():
-            mouse_pos = pygame.mouse.get_pos()
             if event.type == pygame.QUIT:
                 running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN and mouse_pos[0] > COLOR_BAR_WIDTH:
-                if event.button == 1:
-                    mouse_pos = pygame.mouse.get_pos()
+            elif event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.MOUSEMOTION and pygame.mouse.get_pressed()[0]:
+                mouse_pos = pygame.mouse.get_pos() # WAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAh not 
+                if mouse_pos[0] > SCREEN_WIDTH - COLOR_BAR_WIDTH:
                     for i, button in enumerate(color_buttons):
                         if button.collidepoint(mouse_pos):
                             selected_color = COLOR_OPTIONS[i]
-            elif (event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.MOUSEBUTTONDOWN) and pygame.mouse.get_pressed()[0]:
-                # Get the clicked hexagon and update its state
-                clicked_hexagon = hexagon_clicked(mouse_pos, hexagons)
-                update_hexagon_state(clicked_hexagon) 
-        
-        screen = update_screen(screen, hexagons)
+                else:
+                    clicked_hexagon = hexagon_clicked(mouse_pos, grid)
+                    update_hexagon_state(clicked_hexagon)
+    
+        screen = update_screen(screen, grid.grid)
         pygame.display.flip()
         clock.tick(90) # FPS
     

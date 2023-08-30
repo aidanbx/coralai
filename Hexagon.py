@@ -60,7 +60,7 @@ class HexagonGrid:
         hexagon_array = np.empty((self.height, self.width), dtype=object)
         for x in range(self.width):
             for y in range(self.height): 
-                hexagon = Hexagon(x-self.width // 2, y - self.height // 2)
+                hexagon = Hexagon(x - self.width // 2, y - self.height // 2)
                 hexagon_array[x][y] = hexagon
         return hexagon_array
     
