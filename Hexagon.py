@@ -20,6 +20,8 @@ class Hexagon:
         self.y = y
         self.q = x
         self.r = y - (x + (x & 1)) // 2 
+        self.x_index = None
+        self.y_index = None
         self.vertices = []
         self.color = color
         self.neighbors = []
@@ -35,15 +37,15 @@ class Hexagon:
         self.neighbors.append(key)
     
     def get_vertices(self, hexagon_size, grid_width, grid_height): # for visualization
-        self.x = hexagon_size * (3/2 * self.q)
-        self.y = hexagon_size * (math.sqrt(3) / 2 * self.q + math.sqrt(3) * self.r)
+        x = hexagon_size * (3/2 * self.q)
+        y = hexagon_size * (math.sqrt(3) / 2 * self.q + math.sqrt(3) * self.r)
         
         vertices = []
         for i in range(6):
             angle_deg = 60 * i
             angle_rad = math.pi / 180 * angle_deg
-            vertex_x = self.x + hexagon_size * math.cos(angle_rad)
-            vertex_y = self.y + hexagon_size * math.sin(angle_rad)
+            vertex_x = x + hexagon_size * math.cos(angle_rad)
+            vertex_y = y + hexagon_size * math.sin(angle_rad)
             vertices.append((vertex_x, vertex_y))
         
         self.vertices = vertices
@@ -61,6 +63,8 @@ class HexagonGrid:
         for x in range(self.width):
             for y in range(self.height): 
                 hexagon = Hexagon(x - self.width // 2, y - self.height // 2)
+                hexagon.x_index = x
+                hexagon.y_index = y
                 hexagon_array[x][y] = hexagon
         return hexagon_array
     
