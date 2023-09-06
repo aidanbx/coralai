@@ -1,46 +1,98 @@
 # %%
 import yaml
+import importlib
+import tester
+importlib.reload(tester)
 
-def ensure_min_storage(config, cell, live_channels):
-    storage_on_cell = live_channels[config["physiology"]["channels"].index("storage")][cell[0], cell[1]]
-    cytoplasm_on_cell = live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]]
-    cytoplasm_to_storage_rate = config["physiology"]["exchange_rates"]["cytoplasm_to_storage"]
+import numpy as np
 
-    if storage_on_cell < config["physiology"]["min_storage"]:
-        storage_deficit = config["physiology"]["min_storage"] - storage_on_cell
-        req_cytoplasm = storage_deficit / cytoplasm_to_storage_rate
-        if req_cytoplasm > cytoplasm_on_cell:
-            live_channels[config["physiology"]["channels"].index("storage")][cell[0], cell[1]] += cytoplasm_on_cell * cytoplasm_to_storage_rate
-            live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]] = 0
-        else:
-            live_channels[config["physiology"]["channels"].index("storage")][cell[0], cell[1]] += storage_deficit
-            live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]] -= req_cytoplasm
+# %% Load Config & init Tests -------------------------------------------------
+def load_check_config(config_object):
+    if isinstance(config_object, str):
+        with open(config_object) as file:
+            config = yaml.load(file, Loader=yaml.FullLoader)
+    elif isinstance(config_object, dict):
+        config = config_object
+    else:
+        raise TypeError("config_object must be either a path (str) or a config (dict)")
 
+    all_visible_channels = (config["environment"]["channels"]
+                    + config["physiology"]["channels"]
+                    + config["physiology"]["actuators"])
 
-def absorb_convert_food(config, cell, env_channels, live_channels):
-    food_on_cell = env_channels[config["environment"]["channels"].index("food")][cell[0], cell[1]]
-    max_intake = 1 - live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]]
+    # Ensure all perception and action channels exist
+    for channel in config["physiology"]["perception_channels"]:
+        assert channel in all_visible_channels, f"Channel {channel} not found in all_channels"
+        
+    assert config["environment"]["channels"] == ["food", "poison", "obstacle"]
+    assert config["physiology"]["channels"] == ["cytoplasm", "storage", "muscle"]
+    assert config["physiology"]["perception_channels"] == ["food", "poison", "obstacle", "cytoplasm", "storage", "muscle"]
+    assert config["physiology"]["actuators"] == ["rotate", "contract", "delta_muscle", "delta_storage"] 
+    return config
 
-    if food_on_cell > 0:
-        intake = max(min(max_intake, config["physics"]["cytoplasm_absorption_rate"] * food_on_cell), food_on_cell)
-        live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]] += intake
-        env_channels[config["environment"]["channels"].index("food")][cell[0], cell[1]] -= intake
-    
-    ensure_min_storage(config, cell, live_channels)
+if __name__ == "__main__":
+    verbose = True # For testing
+    config = tester.test(lambda: load_check_config("./config.yaml"),
+        "Load Check Config Test", verbose=verbose)
 
+    # cell: location
+    # actuators: cell output
+    # env_channels and live_channels: shape determined by locality kernel/ajacency matrix?
+    cell = np.array([1, 1])
+    actuator_names = config["physiology"]["actuators"]
+    env_channel_names = config["environment"]["channels"]
+    live_channel_names = config["physiology"]["channels"]
 
-def check_config(config):
+    actuators = np.array([+1.5,      # rotate 
+                            -0.8,    # contraction
+                            +0.1,    # delta_muscle
+                            +0.1])   # delta_storage
+    adjacency_kernel = config["physics"]["adjacency_kernel"]
+    if adjacency_kernel == "moore":
+        # env and live channels of moore kernel shape (3x3)
+        env_channels = np.array([[0, 0, 0], [0.8, 0, 0], [0, 0, 0],   # food channel
+                                [0, 0, 0], [0, 0, 0], [0, 0, 0],     # poison channel
+                                [0, 1, 1], [0, 0, 0], [0, 0, 0]])      # obstacle channel, binary
+        
+        live_channels = np.array([[0.2, 0, 0], [0.8, 1, 0], [0, 0, 0],   # cytoplasm channel
+                                [0, 0, 0], [0.1, 0, 1], [0, 0, 0],     # storage channel
+                                [0, 1, 1], [0, 0, 0], [0, 0, 0]])      # muscle channel
+# %% Rotate Muscle Vector -----------------------------------------------------
+def rotate_muscle_vector(config, muscle_vector, muscle_actuators):
+    # Muscle vector:
+    #   angle representing directionality of flow and
+    #   magnitude representing the influence it COULD have on flow per unit time (at a representative energy cost)
+    #   costs energy relative to the magnitude of the vector to rotate
+    # Rotation:
+    #  positive is clockise, negative is counterclockwise
+    #  magnitude of rotation translates to energy cost based on muscle magnitude
+    pass
+
+if __name__ == "__main__":
+    pass
+
+def calculate_energy_costs(config, cell, actuators, env_channels, live_channels):
+    # Energy cost of rotation
+    # Energy cost of contraction
+    # Energy cost of cytoplasm to storage conversion
+    # Energy cost of storage to muscle conversion
+    # Energy cost of muscle contraction
+    # Energy cost of cytoplasm to muscle conversion
+    # Energy cost of storage to cytoplasm conversion
     pass
 
 
+# %% Apply Local Physics ------------------------------------------------------
 def apply_local_physics(config, cell, actuators, env_channels, live_channels):
-    check_config(config)
+    load_check_config(config)
+    energy_cost = calculate_energy_cost(config, cell, actuators, env_channels, live_channels)
+    # Evenly distribute energy to actuators
+
     # absorb_convert_food(config, cell, env_channels, live_channels)
     # exchange_muscle(config, cell, actuators, live_channels)
     # exchange_storage(config, cell, actuators, live_channels)
     # contract_muscle(config, cell, actuators, env_channels, live_channels)
     # delegate_cytoplasm()
-
 
 if __name__ == "__main__":
     import importlib
@@ -102,3 +154,31 @@ physics:
   muscle_to_storage_atrophy_rate: 0.1
 """
 # %%
+
+# %% Ensure Min Storage, Absorb Convert Food ----------------------------------
+def ensure_min_storage(config, cell, live_channels):
+    storage_on_cell = live_channels[config["physiology"]["channels"].index("storage")][cell[0], cell[1]]
+    cytoplasm_on_cell = live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]]
+    cytoplasm_to_storage_rate = config["physiology"]["exchange_rates"]["cytoplasm_to_storage"]
+
+    if storage_on_cell < config["physiology"]["min_storage"]:
+        storage_deficit = config["physiology"]["min_storage"] - storage_on_cell
+        req_cytoplasm = storage_deficit / cytoplasm_to_storage_rate
+        if req_cytoplasm > cytoplasm_on_cell:
+            live_channels[config["physiology"]["channels"].index("storage")][cell[0], cell[1]] += cytoplasm_on_cell * cytoplasm_to_storage_rate
+            live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]] = 0
+        else:
+            live_channels[config["physiology"]["channels"].index("storage")][cell[0], cell[1]] += storage_deficit
+            live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]] -= req_cytoplasm
+
+
+def absorb_convert_food(config, cell, env_channels, live_channels):
+    food_on_cell = env_channels[config["environment"]["channels"].index("food")][cell[0], cell[1]]
+    max_intake = 1 - live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]]
+
+    if food_on_cell > 0:
+        intake = max(min(max_intake, config["physics"]["cytoplasm_absorption_rate"] * food_on_cell), food_on_cell)
+        live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]] += intake
+        env_channels[config["environment"]["channels"].index("food")][cell[0], cell[1]] -= intake
+    
+    ensure_min_storage(config, cell, live_channels)

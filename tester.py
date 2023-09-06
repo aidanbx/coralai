@@ -11,6 +11,7 @@ def test(func, title, verbose = False, verbose_func = print_results):
             print("\033[92mTest \"" + title + "\" Successful.\033[0m")
             if verbose_func:
                 verbose_func(result, title)
+        return result
     except Exception as e:
         print("\033[91mTest \"" + title + "\" Failed:", e, "\033[0m")
         if verbose:

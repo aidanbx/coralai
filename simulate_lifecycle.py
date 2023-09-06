@@ -10,6 +10,26 @@ import importlib
 import apply_physics
 importlib.reload(apply_physics)
 
+# %% Load Check Congif --------------------------------------------------------
+def load_check_config(config_object):
+    if isinstance(config_object, str):
+        with open(config_object) as file:
+            config = yaml.load(file, Loader=yaml.FullLoader)
+    elif isinstance(config_object, dict):
+        config = config_object
+    else:
+        raise TypeError("config_object must be either a path (str) or a config (dict)")
+
+    all_channels = (config["environment"]["channels"]
+                    + config["physiology"]["channels"]
+                    + config["physiology"]["perception_channels"]
+                    + config["physiology"]["actuators"])
+
+    # Ensure all perception and action channels exist
+    for channel in config["physiology"]["perception_channels"] + config["physiology"]["actuators"]:
+        assert channel in all_channels, f"Channel {channel} not found in all_channels"
+        
+    return config
 
 def create_dumb_physiology(config):
     perception_channels = config["physiology"]["perception_channels"]
@@ -137,20 +157,6 @@ def init_live_channels(config):
     live_channels = np.zeros((n_live_channels, width, height))
     return live_channels
 
-
-def load_check_config(config_file):
-    with open(config_file, 'r') as file:
-        config = yaml.load(file, Loader=yaml.FullLoader)
-        all_channels = (config["environment"]["channels"]
-                        + config["physiology"]["channels"]
-                        + config["physiology"]["perception_channels"]
-                        + config["physiology"]["actuators"])
-
-        # Ensure all perception and action channels exist
-        for channel in config["physiology"]["perception_channels"] + config["physiology"]["actuators"]:
-            assert channel in all_channels, f"Channel {channel} not found in all_channels"
-            
-        return config
     
 
 def simulate_lifecycle(config_file, env_channels, physiology):

@@ -120,6 +120,7 @@ def populate_obstacle(config, channel):
 
         # Generate random values based on provided ranges
         threshold = random.uniform(*threshold_range)
+        
         frequency = random.uniform(*frequency_range)
         octaves = random.randint(*octaves_range)
         persistence = random.uniform(*persistence_range)

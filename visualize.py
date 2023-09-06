@@ -170,10 +170,15 @@ def visualize_stacked_channels(config, channels):
             super_image[mask] = images[i][mask]
     
     return super_image
-
+    
 if __name__ == "__main__":
     show_images(channels_to_images(config, channels))
     tester.test(lambda: visualize_stacked_channels(config, channels),
                 "Visualize Stacked Channels",
                 verbose,
                 lambda result, title: show_image(result))
+
+
+# %% Pixel Clusters Visualization ---------------------------------------------
+def pixel_vis(config, channels):
+    pass 

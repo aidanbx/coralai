@@ -3,25 +3,23 @@ environment:
   height: 100
   boundary_condition: "torus"
   channels: 
-    - "food"
-    - "poison"
+    - "source_sink"
     - "obstacle"
-    - "chemoattractant"
-    - "chemorepellant"
+    - "scent"
 
-  food_generation: "levy_dust"
-  food_generation_params:
+  source_generation: "levy_dust"
+  source_generation_params:
     pad: [0, 5] # these are ranges, low high
     alpha: [0.1, 2]
     beta: [-1, 1] 
-    num_food: [50, 500]
+    num_source: [50, 500]
 
-  poison_generation: "levy_dust"
-  poison_generation_params:
+  sink_generation: "levy_dust"
+  sink_generation_params:
     pad: [0, 5]
     alpha: [0.1, 2]
     beta: [-1, 1]
-    num_poison: [20, 200]
+    num_sink: [20, 200]
 
   obstacle_generation: "perlin_noise"
   obstacle_generation_params:
@@ -32,47 +30,20 @@ environment:
     persistence: [0.25, 1.0]
     lacunarity: [1.5, 3.0]
 
-  chemoattractant_params:
-    iterations: 300
-    dropoff: 1
-    
-  chemorepellant_params:
+  scent_params:
     iterations: 300
     dropoff: 1
 
 visualize:
   colormaps:
-    food: "Greens"
-    poison: "Oranges"
+    source_sink: "PiYG"
     obstacle: "binary"
-    chemoattractant: "Greens"
-    chemorepellant: "Oranges"
   chemo_alpha: 2
-
-interactive_sim:
-  enable: true
-  fps: 10
-  save: false
-  save_path: "ALife2023/interactive_sim"
-  save_name: "interactive_sim"
-  save_format: "gif"
-  save_fps: 10
-  save_start: 0
-  save_end: 100
-  save_every: 1
-  save_colormaps:
-    food: "Greens"
-    poison: "Oranges"
-    obstacle: "binary"
-    chemoattractant: "Greens"
-    chemorepellant: "Oranges"
-  save_chemo_alpha: 0.5
   
 lifecycle:
   spore_params:
-    initial_muscle: 1.0
-    initial_storage: 1.0
-    initial_communication: "random"
+    initial_strength: 1.0
+    initial_singal: "random"
   inoculation:
     num_spores: 3
     where_to_place: "on_food"
@@ -84,41 +55,37 @@ lifecycle:
 
 physiology:  
   channels:
-    - "muscle"
+    - "mass"    # vector, magnitude is mass direction is flow. Positive contraction aligns, negative against
     - "cytoplasm"
-    - "storage"
-    - "communication"
+    - "signals"
 
-  perception_channels:
+  perception_channels: # Note: cannot see food itself, only the scent
     - "obstacle"
-    - "chemoattractant"
-    - "chemorepellant"
-    - "muscle"
+    - "scent"
+    - "mass_vector"
     - "cytoplasm"
-    - "storage"
-    - "communication"
+    - "signals"
 
   actuators:
     - "rotate"      # %change in direction of flow, energy cost proportional to muscle size
-    - "contraction" # %change in reservoir size (muscle) -- multiplied by open % TODO: Refractory period?
-    - "delta_muscle"
-    - "delta_storage"
+    - "contract"    # %change in reservoir size (muscle) -- multiplied by open % TODO: Refractory period?
+    - "grow"
   num_communication_channels: 10
   num_actuators: 17
-  
 
   perception_kernel:
     kernel_type: "moore"
-    kernel_radius: 1
 
 physics:
+  adjacency_kernel:
+    kernel_type: "moore"
+
   cytoplasm_absorption_rate: 0.1
   exchange_rates:
     food_to_cytoplasm: 5.0        # 1 food -> 5 cytoplasm 
-    cytoplasm_to_storage: 0.5    # 1 cytoplasm -> 0.2 storage
-    storage_to_muscle: 0.7       # 1 storage -> 0.7 muscle
+    cytoplasm_to_muscle: 0.7       # 1 cytoplasm -> 0.7 muscle
     muscle_contraction_cost: 0.2  
-  min_storage: 0.1
+  min_mass: 0.1
   muscle_max_size: 2.0
-  storage_max_units: 10
   muscle_to_storage_atrophy_rate: 0.1
+  network_complexity_cost: 0.1 
