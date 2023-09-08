@@ -111,6 +111,8 @@ physiology:
     kernel_type: "moore" # FIND A KERNEL THAT WORKS WITH HEXAGONS, other than 1/6 everything?
     kernel_radius: 1
 
+# MAKE GENERAL KERNAL for all the johns
+
 physics:
   cytoplasm_absorption_rate: 0.1
   exchange_rates:

@@ -12,10 +12,9 @@ OBSTACLE_BLACK = (0, 0, 0)  # Black
 CHEMOATTRACTANT_YELLOW = (250, 237, 39)  # Soft Yellow
 CHEMOREPELLENT_RED = (87, 14, 14)  # Dark Red
 
-
 # Axial Coordinates
 class Hexagon:
-    def __init__(self, x, y, color=OFF_WHITE):
+    def __init__(self, x, y, color=(255, 255, 255)):
         self.x = x
         self.y = y
         self.q = x
@@ -85,9 +84,6 @@ class HexagonGrid:
                 return hexagon
 
         return None
-
-
-
 
 # Example usage
 # grid = HexagonGrid(radius=3)

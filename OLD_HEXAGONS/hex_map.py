@@ -13,7 +13,6 @@ info = pygame.display.Info()
 # SCREEN_HEIGHT = info.current_h - 55
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 800
-
 COLOR_BAR_WIDTH = 50
 COLOR_BAR_HEIGHT = SCREEN_HEIGHT
 
@@ -96,7 +95,7 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.MOUSEMOTION and pygame.mouse.get_pressed()[0]:
-                mouse_pos = pygame.mouse.get_pos() # WAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAh not 
+                mouse_pos = pygame.mouse.get_pos() 
                 if mouse_pos[0] > SCREEN_WIDTH - COLOR_BAR_WIDTH:
                     for i, button in enumerate(color_buttons):
                         if button.collidepoint(mouse_pos):
@@ -113,4 +112,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
