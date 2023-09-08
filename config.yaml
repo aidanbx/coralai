@@ -55,9 +55,9 @@ lifecycle:
 
 physiology:  
   channels:
-    - "mass"    # vector, magnitude is mass direction is flow. Positive contraction aligns, negative against
-    - "cytoplasm"
-    - "signals"
+    - "mass"      # Multiple channels each representing the weight between adjacent cells in the order of the kernel
+    - "cytoplasm" 
+    - "signals"   # Multiple channels
 
   perception_channels: # Note: cannot see food itself, only the scent
     - "obstacle"
@@ -70,6 +70,7 @@ physiology:
     - "rotate"      # %change in direction of flow, energy cost proportional to muscle size
     - "contract"    # %change in reservoir size (muscle) -- multiplied by open % TODO: Refractory period?
     - "grow"
+
   num_communication_channels: 10
   num_actuators: 17
 
