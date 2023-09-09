@@ -1,11 +1,10 @@
-
-# %%
-import numpy as np
-from scipy import signal
-import matplotlib.pyplot as plt
+import importlib
 import yaml
 
-import importlib
+import numpy as np
+from scipy import signal
+
+import matplotlib.pyplot as plt
 
 import apply_physics
 importlib.reload(apply_physics)
@@ -153,8 +152,8 @@ def load_check_config(config_file):
         return config
     
 
-def simulate_lifecycle(config_file, env_channels, physiology):
-    config = load_check_config(config_file)
+def simulate_lifecycle(config_object, env_channels, physiology):
+    config = load_check_config(config_object)
     live_channels = init_live_channels(config)
     inoculate_env(config, env_channels, live_channels)
     run_lifecycle(config, env_channels, live_channels, physiology)
@@ -193,4 +192,3 @@ Cells decide where to shed cytoplasm by contracting their reservoirs, this is al
 Cytoplasm can flow into empty space (every cell is capable of carrying 1 or fewer units of cytoplasm,
 even if it has no muscle to pump it.
 """
-# %%

@@ -1,4 +1,3 @@
-# %%
 import yaml
 
 def ensure_min_storage(config, cell, live_channels):
@@ -76,4 +75,3 @@ physics:
   storage_max_units: 10
   muscle_to_storage_atrophy_rate: 0.1
 """
-# %%

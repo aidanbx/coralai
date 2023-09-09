@@ -1,31 +1,22 @@
+import importlib
+import random
+import yaml
 
-
-# %% 
-from matplotlib import animation
+import matplotlib.pyplot as plt
 import numpy as np
 import noise
-from scipy.stats import uniform
-from scipy.stats import levy_stable
-from scipy import signal
-import yaml
-import random
-import matplotlib.pyplot as plt
-
-import importlib
-import visualize
-importlib.reload(visualize)
-
 import tester
-importlib.reload(tester)
+
+from scipy import signal
+from scipy.stats import levy_stable
+from scipy.stats import uniform
 
 
 if __name__ == "__main__":
     verbose = True # For testing
 
-# LINES TO FOCUS ON FOR CHANGING TO WORK WITH HEXAGONAL MAP ----------------------------------------------------------
 
-# %% 
-def remove_overlap(config, env_channels):
+def remove_overlap(config: dict, env_channels: np.array) -> None: 
     food_channel = env_channels[config["environment"]["channels"].index("food")]
     poison_channel = env_channels[config["environment"]["channels"].index("poison")]
     obstacle_channel = env_channels[config["environment"]["channels"].index("obstacle")]
@@ -43,7 +34,8 @@ def remove_overlap(config, env_channels):
     poison_channel[overlap] = 0
 
 
-def diffuse_chemical(channel, obstacle_channel, iterations, dropoff=0.5):
+def diffuse_chemical(channel: np.array, obstacle_channel: np.array, iterations: int, dropoff: float = 0.5) -> np.array:
+    
     # iterations decide how much the chemical spreads out
     for _ in range(iterations):
         # Using convolution for averaging neighboring cells
@@ -62,7 +54,7 @@ def diffuse_chemical(channel, obstacle_channel, iterations, dropoff=0.5):
     return channel
 
 
-def populate_chemoattractant(config, env_channels):
+def populate_chemoattractant(config: dict, env_channels: np.array) -> None:
     food_channel = env_channels[config["environment"]["channels"].index("food")]
     obstacle_channel = env_channels[config["environment"]["channels"].index("obstacle")]
     chemoattractant_channel = env_channels[config["environment"]["channels"].index("chemoattractant")]
@@ -75,7 +67,7 @@ def populate_chemoattractant(config, env_channels):
     env_channels[config["environment"]["channels"].index("chemoattractant")] = diffused_channel
 
 
-def populate_chemorepellant(config, env_channels):
+def populate_chemorepellant(config: dict, env_channels: np.array) -> None:
     poison_channel = env_channels[config["environment"]["channels"].index("poison")]
     obstacle_channel = env_channels[config["environment"]["channels"].index("obstacle")]
     chemorepellant_channel = env_channels[config["environment"]["channels"].index("chemorepellant")]
@@ -108,10 +100,10 @@ def levy_dust(shape: tuple, points: int, alpha: float, beta: float, pad: int = 0
     x = np.cumsum(step_length * np.cos(angle)) % (shape[0] - pad)
     y = np.cumsum(step_length * np.sin(angle)) % (shape[1] - pad)
 
-    return np.array([x, y]) # CHANGE --------------------------------------------------------------------
+    return np.array([x, y]) 
 
 
-def populate_obstacle(config, channel):
+def populate_obstacle(config: dict, channel: np.array) -> None:
     obstacle_params = config["environment"]["obstacle_generation_params"]
     
     if config["environment"]["obstacle_generation"] == "perlin_noise":
@@ -140,7 +132,7 @@ def populate_obstacle(config, channel):
         raise ValueError(f"Obstacle generation method {config['environment']['obstacle_generation']} not recognized.")
     
 
-def populate_poison(config, channel):
+def populate_poison(config: dict, channel: np.array) -> None:
     poison_params = config["environment"]["poison_generation_params"]
     
     if config["environment"]["poison_generation"] == "levy_dust":
@@ -160,7 +152,7 @@ def populate_poison(config, channel):
         raise ValueError(f"Poison generation method {config['environment']['poison_generation']} not recognized.")
 
 
-def populate_food(config, channel):
+def populate_food(config: dict, channel: np.array) -> None:
     food_params = config["environment"]["food_generation_params"]
     
     if config["environment"]["food_generation"] == "levy_dust":
@@ -180,70 +172,62 @@ def populate_food(config, channel):
         raise ValueError(f"Food generation method {config['environment']['food_generation']} not recognized.")
 
 
-def populate_env_channels(config, env_channels):
-    for ch in config["environment"]["channels"]:
-        channel = env_channels[config["environment"]["channels"].index(ch)]
-        if ch == "food":
-            populate_food(config, channel)
-        elif ch == "poison":
-            populate_poison(config, channel)
-        elif ch == "obstacle":
-            populate_obstacle(config, channel)
-        elif ch == "chemoattractant":
-            populate_chemoattractant(config, env_channels)
-        elif ch == "chemorepellant":
-            populate_chemorepellant(config, env_channels)
-        else:
-            raise ValueError(f"Channel {ch} not recognized.")
+def populate_env_channels(config: dict, env_channels: np.array) -> np.array:
+    # Define a dictionary of functions to populate different types of channels
+    channel_populators = {
+        "food": populate_food,
+        "poison": populate_poison,
+        "obstacle": populate_obstacle,
+        "chemoattractant": populate_chemoattractant,
+        "chemorepellant": populate_chemorepellant
+    }
+    
+    channels = config["environment"]["channels"]
+    
+    unrecognized_channels = set(channels) - set(channel_populators.keys()) 
+    if unrecognized_channels:
+        raise ValueError(f"Channels {unrecognized_channels} not recognized.")
+    
+    # For each channel in the configuration, call the appropriate function to populate it
+    for ch in channels:
+        channel_populator = channel_populators[ch]
+        channel_index = channels.index(ch)
+        channel_populator(config, env_channels[channel_index])
+    
     return env_channels
 
 
-def init_env_channels(config):
+def init_env_channels(config: dict) -> np.array:
     width = config["environment"]["width"]
     height = config["environment"]["height"]
-    n_env_channels = len(config["environment"]["channels"])
-    env_channels = np.zeros((n_env_channels, width, height))
+    env_channels_length = len(config["environment"]["channels"])
+    env_channels = np.zeros((env_channels_length, width, height))
     return env_channels
 
 
-def visualize_env(config, env_channels):
-    return visualize.visualize_stacked_channels(config, env_channels)
+def check_config(config_object: dict) -> None: 
+    assert isinstance(config_object, dict), "config must be a dict object"
 
-def load_check_config(config_object):
-    
-    if isinstance(config_object, str):
-        with open(config_object) as file:
-            config = yaml.load(file, Loader=yaml.FullLoader)
-    elif isinstance(config_object, dict):
-        config = config_object
-    else:
-        raise TypeError("config_object must be either a path (str) or a config (dict)")
+    # Assert if alpha and beta values are within the valid range
 
-    # asserts alpha and beta are in their proper ranges
-    # For food_generation_params
-    assert 0 < config["environment"]["food_generation_params"]["alpha"][0] <= 2
-    assert config["environment"]["food_generation_params"]["alpha"][1] <= 2
-    assert -1 <= config["environment"]["food_generation_params"]["beta"][0] <= 1
-    assert -1 <= config["environment"]["food_generation_params"]["beta"][1] <= 1
+    # Food
+    assert 0 < config_object["environment"]["food_generation_params"]["alpha"][0] <= 2
+    assert config_object["environment"]["food_generation_params"]["alpha"][1] <= 2
+    assert -1 <= config_object["environment"]["food_generation_params"]["beta"][0] <= 1
+    assert -1 <= config_object["environment"]["food_generation_params"]["beta"][1] <= 1
 
-    # For poison_generation_params
-    assert 0 < config["environment"]["poison_generation_params"]["alpha"][0] <= 2
-    assert config["environment"]["poison_generation_params"]["alpha"][1] <= 2
-    assert -1 <= config["environment"]["poison_generation_params"]["beta"][0] <= 1
-    assert -1 <= config["environment"]["poison_generation_params"]["beta"][1] <= 1
-
-    return config
+    # Poison
+    assert 0 < config_object["environment"]["poison_generation_params"]["alpha"][0] <= 2
+    assert config_object["environment"]["poison_generation_params"]["alpha"][1] <= 2
+    assert -1 <= config_object["environment"]["poison_generation_params"]["beta"][0] <= 1
+    assert -1 <= config_object["environment"]["poison_generation_params"]["beta"][1] <= 1
 
 
-def generate_env(config_object, visualize=False):
-    config = load_check_config(config_object)
+def generate_env(config: dict, visualize: bool = False) -> np.array:
+    check_config(config)
+
     env_channels = init_env_channels(config)
     populate_env_channels(config, env_channels)
     remove_overlap(config, env_channels)
-    # populate_chemoattractant(config, env_channels)
-    # populate_chemorepellant(config, env_channels)
-    remove_overlap(config, env_channels)
-
-    if visualize:
-        return env_channels, visualize_env(config_object, env_channels)
+ 
     return env_channels
