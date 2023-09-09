@@ -51,7 +51,7 @@ def perceive(config, cell, env_channels, live_channels):
     return perception
 
 
-def stoppage_condition_met(config: dict, update_num: int, init_conditions: dict) -> bool
+def stoppage_condition_met(config: dict, update_num: int, init_conditions: dict) -> bool:
     if config["lifecycle"]["stoppage"]["condition"] == "iterations":
         if init_conditions["num_iterations"] is None:
             raise ValueError("Stoppage condition 'iterations' not initialized.")
