@@ -10,7 +10,7 @@ import apply_physics
 importlib.reload(apply_physics)
 
 
-def create_dumb_physiology(config):
+def create_dumb_physiology(config: dict):
     perception_channels = config["physiology"]["perception_channels"]
     actuators = config["physiology"]["actuators"]
 
@@ -20,7 +20,7 @@ def create_dumb_physiology(config):
     return dumb_physiology
 
 
-def act(config, input, physiology):
+def act(config, input, physiology): # See line 93
     return physiology(input)
 
 
@@ -51,7 +51,7 @@ def perceive(config, cell, env_channels, live_channels):
     return perception
 
 
-def stoppage_condition_met(config, update_num, init_conditions):
+def stoppage_condition_met(config: dict, update_num: int, init_conditions: dict) -> bool
     if config["lifecycle"]["stoppage"]["condition"] == "iterations":
         if init_conditions["num_iterations"] is None:
             raise ValueError("Stoppage condition 'iterations' not initialized.")
@@ -60,7 +60,7 @@ def stoppage_condition_met(config, update_num, init_conditions):
         raise ValueError(f"Stoppage condition {config['lifecycle']['stoppage']['condition']} not recognized.")
 
 
-def init_stoppage_condition(config):
+def init_stoppage_condition(config: dict) -> dict:
     init_conditions = {}
     if config["lifecycle"]["stoppage"]["condition"] == "iterations":
         low = config["lifecycle"]["stoppage"]["stoppage_range"][0]
@@ -71,13 +71,13 @@ def init_stoppage_condition(config):
     return init_conditions
 
 
-def identify_cells_to_update(config, env_channels, live_channels):
+def identify_cells_to_update(config: dict, env_channels: np.array, live_channels: np.array) -> np.array:
     # for now just all cells with storage above minimum
     storage_channel = live_channels[config["physiology"]["channels"].index("storage")]
     return np.argwhere(storage_channel > config["physics"]["min_storage"])
 
 
-def run_lifecycle(config, env_channels, live_channels, physiology):
+def run_lifecycle(config: dict, env_channels: np.array, live_channels: np.array, physiology: callable) -> None:
     """
     Perform the main lifecycle loop.
     """
@@ -90,13 +90,13 @@ def run_lifecycle(config, env_channels, live_channels, physiology):
         
         for cell in cells_to_update:
             input = perceive(config, cell, env_channels, live_channels)
-            output = act(config, input, physiology)
+            output = act(config, input, physiology) # You got a plan for this?
             apply_physics.apply_local_physics(config, cell, output, env_channels, live_channels) 
         
         # Visualization, if needed
 
 
-def inoculate_env(config, env_channels, live_channels):
+def inoculate_env(config: dict, env_channels: np.array, live_channels: np.array) -> None:
     obstacle_channel = env_channels[config["environment"]["channels"].index("obstacle")]
     poison_channel = env_channels[config["environment"]["channels"].index("poison")]
     food_channel = env_channels[config["environment"]["channels"].index("food")]
@@ -129,7 +129,7 @@ def inoculate_env(config, env_channels, live_channels):
         live_channels[config["physiology"]["channels"].index("storage"), position[0], position[1]] = 1
 
 
-def init_live_channels(config):
+def init_live_channels(config: dict):
     width = config["environment"]["width"]
     height = config["environment"]["height"]
     n_live_channels = len(config["physiology"]["channels"])
@@ -137,28 +137,29 @@ def init_live_channels(config):
     return live_channels
 
 
-def load_check_config(config_file):
-    with open(config_file, 'r') as file:
-        config = yaml.load(file, Loader=yaml.FullLoader)
-        all_channels = (config["environment"]["channels"]
-                        + config["physiology"]["channels"]
-                        + config["physiology"]["perception_channels"]
-                        + config["physiology"]["actuators"])
+def check_config(config_object: dict) -> None:
+    all_channels = (
+        config_object["environment"]["channels"]
+        + config_object["physiology"]["channels"]
+        + config_object["physiology"]["perception_channels"]
+        + config_object["physiology"]["actuators"]
+    )
 
-        # Ensure all perception and action channels exist
-        for channel in config["physiology"]["perception_channels"] + config["physiology"]["actuators"]:
-            assert channel in all_channels, f"Channel {channel} not found in all_channels"
-            
-        return config
+    # Ensure all perception and action channels exist
+    for channel in (
+        config_object["physiology"]["perception_channels"]
+        + config_object["physiology"]["actuators"]
+    ):
+        assert channel in all_channels, f"Channel {channel} not found in all_channels"
     
 
-def simulate_lifecycle(config_object, env_channels, physiology):
-    config = load_check_config(config_object)
+def simulate_lifecycle(config: dict, env_channels: np.array, physiology: callable) -> dict: 
+    config = check_config(config)
     live_channels = init_live_channels(config)
     inoculate_env(config, env_channels, live_channels)
     run_lifecycle(config, env_channels, live_channels, physiology)
     
-    return env_channels, live_channels
+    return {env_channels, live_channels}
 
 
 """

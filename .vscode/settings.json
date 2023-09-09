@@ -1,0 +1,7 @@
+{
+    "yaml.schemas": {
+        "kubernetes": "kubernetes.yml",
+        "http://json.schemastore.org/appveyor": "appveyor.yml",
+        "https://json.schemastore.org/yamllint.json": "file:///Users/erikluu/Documents/cal-poly/Thesis/EINCASM/config.yaml"
+    }
+}
