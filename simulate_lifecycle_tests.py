@@ -1,13 +1,13 @@
 from simulate_lifecycle import *
 
+import yaml
 import generate_env
-importlib.reload(generate_env)
 
 # TEST: 0
 # ---------------
 config = yaml.safe_load("./config.yaml")
-env_channels = generate_env.generate_env("./config.yaml", visualize=True)
-config = load_check_config("./config.yaml")
+env_channels = generate_env.generate_env(config, visualize=True)
+config = check_config(config)
 live_channels = init_live_channels(config)
 inoculate_env(config, env_channels, live_channels)
 run_lifecycle(config, env_channels, live_channels, create_dumb_physiology(config))

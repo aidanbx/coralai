@@ -1,13 +1,8 @@
-import importlib
-import yaml
-
 import numpy as np
 from scipy import signal
-
 import matplotlib.pyplot as plt
-
+    
 import apply_physics
-importlib.reload(apply_physics)
 
 
 def create_dumb_physiology(config: dict):
@@ -20,11 +15,11 @@ def create_dumb_physiology(config: dict):
     return dumb_physiology
 
 
-def act(config, input, physiology): # See line 93
+def act(config: dict, input: np.array, physiology: callable) -> any: # See line 93
     return physiology(input)
 
 
-def perceive(config, cell, env_channels, live_channels):
+def perceive(config: dict, cell: tuple, env_channels: np.array, live_channels: np.array) -> np.array:
     kernel_type = config["physiology"]["perception_kernel"]["kernel_type"]
 
     if kernel_type == "moore":
@@ -90,7 +85,7 @@ def run_lifecycle(config: dict, env_channels: np.array, live_channels: np.array,
         
         for cell in cells_to_update:
             input = perceive(config, cell, env_channels, live_channels)
-            output = act(config, input, physiology) # You got a plan for this?
+            output = act(config, input, physiology) # Need a lil explanation for this?
             apply_physics.apply_local_physics(config, cell, output, env_channels, live_channels) 
         
         # Visualization, if needed
@@ -138,6 +133,8 @@ def init_live_channels(config: dict):
 
 
 def check_config(config_object: dict) -> None:
+    assert isinstance(config_object, dict), "config must be a dict object"
+    
     all_channels = (
         config_object["environment"]["channels"]
         + config_object["physiology"]["channels"]

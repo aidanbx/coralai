@@ -1,11 +1,7 @@
-import importlib
 import random
-import yaml
 
-import matplotlib.pyplot as plt
 import numpy as np
 import noise
-import tester
 
 from scipy import signal
 from scipy.stats import levy_stable
@@ -172,28 +168,22 @@ def populate_food(config: dict, channel: np.array) -> None:
         raise ValueError(f"Food generation method {config['environment']['food_generation']} not recognized.")
 
 
-def populate_env_channels(config: dict, env_channels: np.array) -> np.array:
-    # Define a dictionary of functions to populate different types of channels
-    channel_populators = {
-        "food": populate_food,
-        "poison": populate_poison,
-        "obstacle": populate_obstacle,
-        "chemoattractant": populate_chemoattractant,
-        "chemorepellant": populate_chemorepellant
-    }
-    
-    channels = config["environment"]["channels"]
-    
-    unrecognized_channels = set(channels) - set(channel_populators.keys()) 
-    if unrecognized_channels:
-        raise ValueError(f"Channels {unrecognized_channels} not recognized.")
-    
-    # For each channel in the configuration, call the appropriate function to populate it
-    for ch in channels:
-        channel_populator = channel_populators[ch]
-        channel_index = channels.index(ch)
-        channel_populator(config, env_channels[channel_index])
-    
+def populate_env_channels(config: dict, env_channels: np.array) -> np.array: 
+    for ch in config["environment"]["channels"]:
+            channel = env_channels[config["environment"]["channels"].index(ch)]
+            if ch == "food":
+                populate_food(config, channel)
+            elif ch == "poison":
+                populate_poison(config, channel)
+            elif ch == "obstacle":
+                populate_obstacle(config, channel)
+            elif ch == "chemoattractant":
+                populate_chemoattractant(config, env_channels)
+            elif ch == "chemorepellant":
+                populate_chemorepellant(config, env_channels)
+            else:
+                raise ValueError(f"Channel {ch} not recognized.")
+
     return env_channels
 
 
