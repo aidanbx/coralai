@@ -83,12 +83,16 @@ def run_lifecycle(config: dict, env_channels: np.array, live_channels: np.array,
         update_num += 1
         cells_to_update = identify_cells_to_update(config, env_channels, live_channels)
         
-        for cell in cells_to_update:
+        # Would stuff be send to the GPU here?
+        for cell in cells_to_update: # this probably needs to not be a for loop
             input = perceive(config, cell, env_channels, live_channels)
-            output = act(config, input, physiology) # Need a lil explanation for this?
+            output = act(config, input, physiology) # Need a lil explanation for this
             apply_physics.apply_local_physics(config, cell, output, env_channels, live_channels) 
-        
+    
         # Visualization, if needed
+        # How should I do this here...
+        # Save the state and have pygame process watch for updates?
+        # Cuz for GPU stuff idk man... Asking pantoja 
 
 
 def inoculate_env(config: dict, env_channels: np.array, live_channels: np.array) -> None:
@@ -105,7 +109,7 @@ def inoculate_env(config: dict, env_channels: np.array, live_channels: np.array)
         candidates = np.argwhere(np.logical_and(food_channel, valid_positions))
     elif config["lifecycle"]["inoculation"]["where_to_place"] == "next_to_food":
         # Get positions adjacent to food
-        kernel = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]])
+        kernel = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]]) # -------------------------------------------- CHANGE KERNEL FOR HEX MAP, put in config?
         adj_to_food = signal.convolve2d(food_channel, kernel, mode='same') > 0
         candidates = np.argwhere(np.logical_and(adj_to_food, valid_positions))
     else:
@@ -157,6 +161,7 @@ def simulate_lifecycle(config: dict, env_channels: np.array, physiology: callabl
     run_lifecycle(config, env_channels, live_channels, physiology)
     
     return {env_channels, live_channels}
+
 
 
 """
