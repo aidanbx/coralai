@@ -28,34 +28,37 @@ heat_loss = np.abs(delta_muscle_mass) * (1.0-growth_efficiency)
 cytoplasm_needed = sum(delta_muscle_mass + heat_loss)
 
 # %%
-
-
 import torch
 
 def activate_muscle_growth(rads, rad_deltas):
     return (rads + rad_deltas)**2 - rads**2
 
-def grow_muscle(rads, rad_deltas, cyt, efficiency):
-    csa_deltas = activate_muscle_growth(rads, rad_deltas)
+def grow_muscle(rads_batch, rad_deltas_batch, cyt_batch, efficiency_batch):
+    csa_deltas = (rads_batch + rad_deltas_batch)**2 - rads_batch**2 # cross-sectional area
     positive_csa_deltas = csa_deltas[csa_deltas > 0]
     negative_csa_deltas = csa_deltas[csa_deltas < 0]
 
-    cyt -= torch.sum(negative_csa_deltas) * efficiency
-    new_csa_mags = rads**2.0
-    new_csa_mags[csa_deltas < 0] += negative_csa_deltas
+    # Atrophy muscle and convert to cyt
+    cyt_batch = cyt_batch + torch.sum(rads_batch, dim=1) * efficiency_batch
+    new_csa_mags = rads_batch**2.0
+    new_csa_mags[csa_deltas < 0] = new_csa_mags[csa_deltas < 0] + negative_csa_deltas
 
-    cyt_desired = torch.sum(positive_csa_deltas)
+    # Grow muscle from cyt, if possible
+    cyt_desired = sum(positive_csa_deltas) # before efficiency loss
     csa_delta_distribution = positive_csa_deltas / cyt_desired
 
-    cyt_consumed = torch.where(cyt_desired > cyt, cyt, cyt_desired)
+    if cyt_desired > cyt:
+        cyt_consumed = cyt
+    else:
+        cyt_consumed = cyt_desired
 
     csa_grown = cyt_consumed * efficiency
     new_csa_mags[csa_deltas > 0] += csa_grown * csa_delta_distribution
 
     cyt -= cyt_consumed
 
-    new_rad_mags = torch.sqrt(new_csa_mags)
-    new_signs = torch.sign(rads + rad_deltas)
+    new_rad_mags = np.sqrt(new_csa_mags)
+    new_signs = np.sign(rads + rad_deltas)
 
     return new_rad_mags * new_signs, cyt
 
@@ -67,4 +70,12 @@ efficiency_batch = torch.tensor([0.8, 0.85, 0.9], dtype=torch.float32)
 
 # Call the function with batched inputs
 new_rads_batch, new_cyt_batch = grow_muscle(rads_batch, rad_deltas_batch, cyt_batch, efficiency_batch)
-# %%
+
+
+
+
+
+
+
+
+

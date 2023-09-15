@@ -57,42 +57,7 @@ if __name__ == "__main__":
         live_channels = np.array([[0.2, 0, 0], [0.8, 1, 0], [0, 0, 0],   # cytoplasm channel
                                 [0, 0, 0], [0.1, 0, 1], [0, 0, 0],     # storage channel
                                 [0, 1, 1], [0, 0, 0], [0, 0, 0]])      # muscle channel
-# %% Rotate Muscle Vector -----------------------------------------------------
-def rotate_muscle_vector(config, muscle_vector, muscle_actuators):
-    # Muscle vector:
-    #   angle representing directionality of flow and
-    #   magnitude representing the influence it COULD have on flow per unit time (at a representative energy cost)
-    #   costs energy relative to the magnitude of the vector to rotate
-    # Rotation:
-    #  positive is clockise, negative is counterclockwise
-    #  magnitude of rotation translates to energy cost based on muscle magnitude
-    pass
 
-if __name__ == "__main__":
-    pass
-
-def calculate_energy_costs(config, cell, actuators, env_channels, live_channels):
-    # Energy cost of rotation
-    # Energy cost of contraction
-    # Energy cost of cytoplasm to storage conversion
-    # Energy cost of storage to muscle conversion
-    # Energy cost of muscle contraction
-    # Energy cost of cytoplasm to muscle conversion
-    # Energy cost of storage to cytoplasm conversion
-    pass
-
-
-# %% Apply Local Physics ------------------------------------------------------
-def apply_local_physics(config, cell, actuators, env_channels, live_channels):
-    load_check_config(config)
-    energy_cost = calculate_energy_cost(config, cell, actuators, env_channels, live_channels)
-    # Evenly distribute energy to actuators
-
-    # absorb_convert_food(config, cell, env_channels, live_channels)
-    # exchange_muscle(config, cell, actuators, live_channels)
-    # exchange_storage(config, cell, actuators, live_channels)
-    # contract_muscle(config, cell, actuators, env_channels, live_channels)
-    # delegate_cytoplasm()
 
 if __name__ == "__main__":
     import importlib
