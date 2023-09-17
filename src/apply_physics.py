@@ -25,8 +25,8 @@ def load_check_config(config_object):
         assert channel in all_visible_channels, f"Channel {channel} not found in all_channels"
         
     assert config["environment"]["channels"] == ["food", "poison", "obstacle"]
-    assert config["physiology"]["channels"] == ["cytoplasm", "storage", "muscle"]
-    assert config["physiology"]["perception_channels"] == ["food", "poison", "obstacle", "cytoplasm", "storage", "muscle"]
+    assert config["physiology"]["channels"] == ["capital", "storage", "muscle"]
+    assert config["physiology"]["perception_channels"] == ["food", "poison", "obstacle", "capital", "storage", "muscle"]
     assert config["physiology"]["actuators"] == ["rotate", "contract", "delta_muscle", "delta_storage"] 
     return config
 
@@ -54,7 +54,7 @@ if __name__ == "__main__":
                                 [0, 0, 0], [0, 0, 0], [0, 0, 0],     # poison channel
                                 [0, 1, 1], [0, 0, 0], [0, 0, 0]])      # obstacle channel, binary
         
-        live_channels = np.array([[0.2, 0, 0], [0.8, 1, 0], [0, 0, 0],   # cytoplasm channel
+        live_channels = np.array([[0.2, 0, 0], [0.8, 1, 0], [0, 0, 0],   # capital channel
                                 [0, 0, 0], [0.1, 0, 1], [0, 0, 0],     # storage channel
                                 [0, 1, 1], [0, 0, 0], [0, 0, 0]])      # muscle channel
 
@@ -85,20 +85,20 @@ if __name__ == "__main__":
 
 
 """
-- Cytoplasm absorption from food sources
-	- Each time step, all food sources on the same square as cytoplasm are depleted and turned into cytoplasm
-	- How much volume of cytoplasm can a cell of food size 1 convert into?
-	- How much volume of cytoplasm can be converted per each time step, (fixed number or percent of potential created volume)
+- capital absorption from food sources
+	- Each time step, all food sources on the same square as capital are depleted and turned into capital
+	- How much volume of capital can a cell of food size 1 convert into?
+	- How much volume of capital can be converted per each time step, (fixed number or percent of potential created volume)
 	- If the reservoir of the cell is filled/close to full, this process doesn't happen/caps out
 - Exchange rate for
-	- Cytoplasm->storage
+	- capital->storage
 	- storage<->muscle
-	- storage->cytoplasm exchange/muscle contraction (to move x% of your reservoir, how much cytoplasm storage do you consume)
-	- storage->cytoplasm (perhaps no loss for the exchange)
-- note: to contract a muscle, there must sufficient storage present, all will be consumed if contraction is larger than available. Cytoplasm is converted to storage storage (to fulfill the minimum automatically and more if the cell desires) before performing this operation.
-- Cytoplasm falling on new cells should always create a minimal amount of storage (slime) - this and hidden channels are left behind as markers
+	- storage->capital exchange/muscle contraction (to move x% of your reservoir, how much capital storage do you consume)
+	- storage->capital (perhaps no loss for the exchange)
+- note: to contract a muscle, there must sufficient storage present, all will be consumed if contraction is larger than available. capital is converted to storage storage (to fulfill the minimum automatically and more if the cell desires) before performing this operation.
+- capital falling on new cells should always create a minimal amount of storage (slime) - this and hidden channels are left behind as markers
 	- If storage is below this amount
-		- cytoplasm is automatically converted
+		- capital is automatically converted
 		- muscle is automatically converted
 		- the cell does not update
 - Physical parameters can change via weather and local rules (esp relevant in a unindividuated large world evolution) - not implemented in current project
@@ -107,10 +107,10 @@ if __name__ == "__main__":
 
 """
 physics:
-  cytoplasm_absorption_rate: 0.1
+  capital_absorption_rate: 0.1
   exchange_rates:
-    food_to_cytoplasm: 5.0        # 1 food -> 5 cytoplasm 
-    cytoplasm_to_storage: 0.5    # 1 cytoplasm -> 0.2 storage
+    food_to_capital: 5.0        # 1 food -> 5 capital 
+    capital_to_storage: 0.5    # 1 capital -> 0.2 storage
     storage_to_muscle: 0.7       # 1 storage -> 0.7 muscle
     muscle_contraction_cost: 0.2  
   min_storage: 0.1
@@ -123,27 +123,27 @@ physics:
 # %% Ensure Min Storage, Absorb Convert Food ----------------------------------
 def ensure_min_storage(config, cell, live_channels):
     storage_on_cell = live_channels[config["physiology"]["channels"].index("storage")][cell[0], cell[1]]
-    cytoplasm_on_cell = live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]]
-    cytoplasm_to_storage_rate = config["physiology"]["exchange_rates"]["cytoplasm_to_storage"]
+    capital_on_cell = live_channels[config["physiology"]["channels"].index("capital")][cell[0], cell[1]]
+    capital_to_storage_rate = config["physiology"]["exchange_rates"]["capital_to_storage"]
 
     if storage_on_cell < config["physiology"]["min_storage"]:
         storage_deficit = config["physiology"]["min_storage"] - storage_on_cell
-        req_cytoplasm = storage_deficit / cytoplasm_to_storage_rate
-        if req_cytoplasm > cytoplasm_on_cell:
-            live_channels[config["physiology"]["channels"].index("storage")][cell[0], cell[1]] += cytoplasm_on_cell * cytoplasm_to_storage_rate
-            live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]] = 0
+        req_capital = storage_deficit / capital_to_storage_rate
+        if req_capital > capital_on_cell:
+            live_channels[config["physiology"]["channels"].index("storage")][cell[0], cell[1]] += capital_on_cell * capital_to_storage_rate
+            live_channels[config["physiology"]["channels"].index("capital")][cell[0], cell[1]] = 0
         else:
             live_channels[config["physiology"]["channels"].index("storage")][cell[0], cell[1]] += storage_deficit
-            live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]] -= req_cytoplasm
+            live_channels[config["physiology"]["channels"].index("capital")][cell[0], cell[1]] -= req_capital
 
 
 def absorb_convert_food(config, cell, env_channels, live_channels):
     food_on_cell = env_channels[config["environment"]["channels"].index("food")][cell[0], cell[1]]
-    max_intake = 1 - live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]]
+    max_intake = 1 - live_channels[config["physiology"]["channels"].index("capital")][cell[0], cell[1]]
 
     if food_on_cell > 0:
-        intake = max(min(max_intake, config["physics"]["cytoplasm_absorption_rate"] * food_on_cell), food_on_cell)
-        live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]] += intake
+        intake = max(min(max_intake, config["physics"]["capital_absorption_rate"] * food_on_cell), food_on_cell)
+        live_channels[config["physiology"]["channels"].index("capital")][cell[0], cell[1]] += intake
         env_channels[config["environment"]["channels"].index("food")][cell[0], cell[1]] -= intake
     
     ensure_min_storage(config, cell, live_channels)

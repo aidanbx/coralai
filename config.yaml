@@ -56,14 +56,14 @@ lifecycle:
 physiology:  
   channels:
     - "mass"      # Multiple channels each representing the weight between adjacent cells in the order of the kernel
-    - "cytoplasm" 
+    - "capital" 
     - "signals"   # Multiple channels
 
   perception_channels: # Note: cannot see food itself, only the scent
     - "obstacle"
     - "scent"
     - "mass_vector"
-    - "cytoplasm"
+    - "capital"
     - "signals"
 
   actuators:
@@ -81,10 +81,10 @@ physics:
   adjacency_kernel:
     kernel_type: "moore"
 
-  cytoplasm_absorption_rate: 0.1
+  capital_absorption_rate: 0.1
   exchange_rates:
-    food_to_cytoplasm: 5.0        # 1 food -> 5 cytoplasm 
-    cytoplasm_to_muscle: 0.7       # 1 cytoplasm -> 0.7 muscle
+    food_to_capital: 5.0        # 1 food -> 5 capital 
+    capital_to_muscle: 0.7       # 1 capital -> 0.7 muscle
     muscle_contraction_cost: 0.2  
   min_mass: 0.1
   muscle_max_size: 2.0

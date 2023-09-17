@@ -213,7 +213,7 @@ if __name__ == "__main__":
 		- Chemorepellant
 		- ^ environment; v life
 		- Muscle
-		- Cytoplasm density/fill
+		- capital density/fill
 		- Storage
 		- Communication channels
 	- Generate desired
@@ -227,12 +227,12 @@ if __name__ == "__main__":
 - Repeat until stoppage parameter (config)
 - Measure reproduction metric after iterations or weather cycle:
 	- Amount of converted energy
-		- Total volume of cytoplasm in your genome
+		- Total volume of capital in your genome
 	- Spore production
-		- Given a signal, maximize cytoplasm volume
+		- Given a signal, maximize capital volume
 
-Cells decide where to shed cytoplasm by contracting their reservoirs, this is already described.
-Cytoplasm can flow into empty space (every cell is capable of carrying 1 or fewer units of cytoplasm,
+Cells decide where to shed capital by contracting their reservoirs, this is already described.
+capital can flow into empty space (every cell is capable of carrying 1 or fewer units of capital,
 even if it has no muscle to pump it.
 """
 # %%
