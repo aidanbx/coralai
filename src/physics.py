@@ -3,8 +3,8 @@ import numpy as np
 from typing import Tuple
 
 def activate_muscles_and_flow(capital: torch.Tensor, muscle_radii: torch.Tensor,
-                              activations: torch.Tensor, flow_efficiency: torch.Tensor, kernel: torch.Tensor
-                              ) -> torch.Tensor:
+                              activations: torch.Tensor, flow_efficiency: torch.Tensor,
+                              kernel: torch.Tensor) -> torch.Tensor:
     """
     Function to activate muscles and simulate flow of cytoplasm. Modifies the capital tensor in-place.
 
@@ -29,6 +29,7 @@ def activate_muscles_and_flow(capital: torch.Tensor, muscle_radii: torch.Tensor,
     negative_flows = torch.where(flows[1:] < 0, flows[1:], zero_tensor)
     flows[1:] = positive_flows.sub(torch.roll(negative_flows, roll_shift, dims=0))
     flows[0] = torch.abs(flows[0])
+    del positive_flows, negative_flows
 
     # Distribute cytoplasm across flows
     total_flow_desired = torch.sum(flows, dim=0)
@@ -43,21 +44,24 @@ def activate_muscles_and_flow(capital: torch.Tensor, muscle_radii: torch.Tensor,
     torch.mul(total_capital_outflow.unsqueeze(0), flow_distribution, out=flows)
 
     # Exchange capital according to the kernel
-    capital.add_(
-        torch.sum(
-            torch.stack(
-                [torch.roll(flows[i], shifts=tuple(map(int, kernel[i])), dims=[0, 1])
-                 for i in range(kernel.shape[0])]
-            ), dim=0
-        )
-    )
+    received_capital = torch.sum(
+                            torch.stack(
+                                [torch.roll(flows[i], shifts=tuple(map(int, kernel[i])), dims=[0, 1])
+                                for i in range(kernel.shape[0])]
+                            ), dim=0
+                        )
+    capital.add_(received_capital)
+    del received_capital
+
     capital = torch.where(capital < 0.001, torch.tensor(0.0), capital)
     assert total_capital_before >= capital.sum(), "Capital must be lost in the system"
 
     return capital
 
+
 def grow_muscle_csa(muscle_radii: torch.Tensor, radii_deltas: torch.Tensor,
-                capital: torch.Tensor, growth_efficiency: torch.Tensor
+                capital: torch.Tensor, growth_efficiency: torch.Tensor,
+                muscle_masks: torch.Tensor, open_cells: torch.Tensor
                 ) -> Tuple[torch.Tensor, torch.Tensor]:
     # TODO: Update to work on batches of environments (simple)
     """
@@ -68,10 +72,17 @@ def grow_muscle_csa(muscle_radii: torch.Tensor, radii_deltas: torch.Tensor,
     radii_deltas (torch.Tensor): Desired changes in radii. Shape: (kernel_size, width, height)
     capital (torch.Tensor): capital present on each cell. Shape: (width, height)
     efficiency (torch.Tensor): The efficiency (heat loss) for a given change in muscle size. Shape: (width, height)
-
+    obstacle_masks (torch.Tensor): The directions for each cell that lead to an obstacle. Shape: (kernel_size, width, height)
+    open_cells (torch.Tensor): The cells that are not obstacles. Shape: (width, height)
+    
     Returns:
     Tuple[torch.Tensor, torch.Tensor]: The new muscle radii and capital tensors.
     """
+    muscle_radii *= muscle_masks
+    radii_deltas *= muscle_masks
+    assert capital[~open_cells].sum() < 1e-6, "Capital in obstacle cells is not zero."
+    capital *= open_cells
+
     zero_tensor = torch.tensor(0.0)
     csa_deltas = (muscle_radii + radii_deltas)**2 - muscle_radii**2  # cross-sectional area
 
@@ -97,34 +108,3 @@ def grow_muscle_csa(muscle_radii: torch.Tensor, radii_deltas: torch.Tensor,
     torch.mul(torch.sqrt(new_csa_mags), torch.sign(muscle_radii.add(radii_deltas)), out=muscle_radii)  
 
     return muscle_radii, capital
-
-
-if __name__ == "__main__":
-    # Tests if capital is consumed correctly and radii are updated in place
-
-    import matplotlib.pyplot as plt
-
-    rads_batch = torch.tensor([[-4]], dtype=torch.float32)
-    rad_deltas_batch = torch.tensor([[2]], dtype=torch.float32)
-    capital_batch = torch.tensor([3.0], dtype=torch.float32)
-    efficiency_batch = torch.tensor([1.0], dtype=torch.float32)
-
-    radii_results = []
-    capital_results = []
-    for _ in range(10):
-        out = grow_muscle_csa(rads_batch, rad_deltas_batch, capital_batch, efficiency_batch)
-        radii_results.append(out[0].item())
-        capital_results.append(out[1].item())
-
-    assert torch.isclose(rads_batch, torch.tensor([[4.358899]], dtype=torch.float32), atol=1e-6).all()
-    assert torch.isclose(capital_batch, torch.tensor([0.0], dtype=torch.float32), atol=1e-6).all()
-
-    plt.figure(figsize=(10, 5))
-    plt.plot(radii_results, label='Radii')
-    plt.plot(capital_results, label='capital')
-    plt.xlabel('Iterations')
-    plt.ylabel('Values')
-    plt.title('Growth of Muscle Tissue')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
