@@ -74,10 +74,11 @@ def grow_muscle_csa(muscle_radii: torch.Tensor, radii_deltas: torch.Tensor,
     efficiency (torch.Tensor): The efficiency (heat loss) for a given change in muscle size. Shape: (width, height)
     obstacle_masks (torch.Tensor): The directions for each cell that lead to an obstacle. Shape: (kernel_size, width, height)
     open_cells (torch.Tensor): The cells that are not obstacles. Shape: (width, height)
-    
+
     Returns:
     Tuple[torch.Tensor, torch.Tensor]: The new muscle radii and capital tensors.
     """
+    assert muscle_radii[~muscle_masks].sum() < 1e-6, "Muscle radii in/towards obstacle cells is not zero."
     muscle_radii *= muscle_masks
     radii_deltas *= muscle_masks
     assert capital[~open_cells].sum() < 1e-6, "Capital in obstacle cells is not zero."
