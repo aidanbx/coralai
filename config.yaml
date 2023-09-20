@@ -1,3 +1,18 @@
+torch:
+  device: 'mps'
+  float_dtype: 'float32'
+
+dimensions: 2
+
+# Must begin with origin, be symmetric, and represent the roll shifts along channel axes.
+kernel: [
+  [0, 0],     # ORIGIN
+  [-1, 0],    # UP
+  [0, 1.0],   # RIGHT
+  [1, 0],     # DOWN
+  [0, -1]     # LEFT
+]
+
 environment:
   width: 100
   height: 100

@@ -1,129 +1,134 @@
 import torch
 import numpy as np
 from typing import Tuple
+import importlib
+import EINCASMConfig
+importlib.reload(EINCASMConfig)
 
-def grow_muscle(radii: torch.Tensor, radii_deltas: torch.Tensor,
-                capital: torch.Tensor, efficiency: torch.Tensor
+
+def activate_muscles_and_flow(cfg: EINCASMConfig, capital: torch.Tensor, muscle_radii: torch.Tensor,
+                              activations: torch.Tensor, flow_efficiency: torch.Tensor) -> torch.Tensor:
+    """
+    Function to activate muscles and simulate flow of cytoplasm. Modifies the capital tensor in-place.
+
+    Parameters:
+    capital (torch.Tensor): The capital present in each cell. Shape: (width, height)
+    muscle_radii (torch.Tensor): The radii of the muscles of each cell. Shape: (kernel_size, width, height)
+    activations (torch.Tensor): The activation levels of the muscles. Shape: (width, height)
+    flow_efficiency (torch.Tensor): The efficiency of flow. Shape: (width, height)
+    kernel (torch.Tensor): The kernel for exchanging capital. Shape: (kernel_size, num_dims)
+
+    Returns:
+    torch.Tensor: The updated capital tensor.
+    """
+    total_capital_before = capital.sum()
+    assert capital.min() >= 0, "Capital cannot be negative"
+
+    cfg.one_tensor = torch.tensor([1.0], device=cfg.device, dtype=cfg.float_dtype)
+
+    # Invert negative flows across kernel
+    roll_shift = (len(cfg.kernel)-1)//2
+    flows = (torch.sign(muscle_radii) * (muscle_radii ** 2)).mul(activations)    # Activation is a percentage (kinda) of CSA
+    positive_flows = torch.where(flows[1:] > 0, flows[1:], cfg.zero_tensor)
+    negative_flows = torch.where(flows[1:] < 0, flows[1:], cfg.zero_tensor)
+    flows[1:] = positive_flows.sub(torch.roll(negative_flows, roll_shift, dims=0))
+    flows[0] = torch.abs(flows[0])
+    del positive_flows, negative_flows
+
+    # Distribute cytoplasm across flows
+    total_flow_desired = torch.sum(flows, dim=0)
+    total_flow_desired_safe = torch.where(total_flow_desired == 0, cfg.one_tensor, total_flow_desired)
+    flow_distribution = flows.div(total_flow_desired_safe.unsqueeze(0))
+    del total_flow_desired_safe
+
+    total_capital_outflow = torch.where(total_flow_desired > capital, capital, total_flow_desired)
+    capital.sub_(total_capital_outflow)
+    assert capital.min() >= 0, "Oops, capital became negative during flow"
+    total_capital_outflow.mul_(flow_efficiency)
+    torch.mul(total_capital_outflow.unsqueeze(0), flow_distribution, out=flows)
+
+    # Exchange capital according to the kernel
+    received_capital = torch.sum(
+                            torch.stack(
+                                [torch.roll(flows[i], shifts=tuple(map(int, cfg.kernel[i])), dims=[0, 1])
+                                for i in range(cfg.kernel.shape[0])]
+                            ), dim=0
+                        )
+    capital.add_(received_capital)
+    del received_capital
+
+    capital = torch.where(capital < 0.001, cfg.zero_tensor, capital)
+    assert total_capital_before >= capital.sum(), "Capital must be lost in the system"
+
+    return capital
+
+
+def generate_muscle_masks(cfg: EINCASMConfig, open_cells: torch.Tensor) -> torch.Tensor:
+    directional_masks = torch.ones((cfg.kernel.shape[0], *open_cells.shape), device=cfg.device, dtype=torch.bool)
+    for i in range(cfg.kernel.shape[0]):
+        directional_masks[i] = torch.roll(open_cells, shifts=tuple(map(int, cfg.kernel[i])), dims=[0, 1])
+    
+    muscle_masks = directional_masks&open_cells
+    return muscle_masks
+
+
+def grow_muscle_csa(cfg: EINCASMConfig, muscle_radii: torch.Tensor, radii_deltas: torch.Tensor,
+                capital: torch.Tensor, growth_efficiency: torch.Tensor,
+                muscle_masks: torch.Tensor, open_cells: torch.Tensor
                 ) -> Tuple[torch.Tensor, torch.Tensor]:
+    # TODO: Update to work on batches of environments (simple)
     """
     Function to simulate the growth of muscle tissue. Modifies the radii and capital tensors in-place.
 
     Parameters:
-    radii (torch.Tensor): The radii of the muscles of each cell. Shape: (batch_size, num_muscles)
-    radii_deltas (torch.Tensor): Desired changes in radii. Shape: (batch_size, num_muscles)
-    capital (torch.Tensor): capital present on each cell. Shape: (batch_size,)
-    efficiency (torch.Tensor): The efficiency (heat loss) for a given change in muscle size. Shape: (batch_size,)
+    radii (torch.Tensor): The radii of the muscles of each cell. Shape: (kernel_size, width, height)
+    radii_deltas (torch.Tensor): Desired changes in radii. Shape: (kernel_size, width, height)
+    capital (torch.Tensor): capital present on each cell. Shape: (width, height)
+    efficiency (torch.Tensor): The efficiency (heat loss) for a given change in muscle size. Shape: (width, height)
+    obstacle_masks (torch.Tensor): The directions for each cell that lead to an obstacle. Shape: (kernel_size, width, height)
+    open_cells (torch.Tensor): The cells that are not obstacles. Shape: (width, height)
 
     Returns:
-    Tuple[torch.Tensor, torch.Tensor]: The new muscle radii and capital for
-      each cell. Shape: ((batch_size, num_muscles), (batch_size,))
+    Tuple[torch.Tensor, torch.Tensor]: The new muscle radii and capital tensors.
     """
-    zero_tensor = torch.tensor(0.0)
-    csa_deltas = (radii + radii_deltas)**2 - radii**2  # cross-sectional area
+    # assert muscle_radii[~muscle_masks].sum() < 1e-6, "Muscle radii in/towards obstacle cells is not zero."
+    muscle_radii *= muscle_masks
+    radii_deltas *= muscle_masks
+    # assert capital.min() >= 0, "Capital cannot be negative"
+    # assert capital[~open_cells].sum() < 1e-6, "Capital in obstacle cells is not zero."
+    capital *= open_cells
+    # assert growth_efficiency.min() >= 0, "Growth efficiency cannot be negative"
 
-    negative_csa_deltas = torch.where(csa_deltas < 0, csa_deltas, zero_tensor)
-    positive_csa_deltas = torch.where(csa_deltas > 0, csa_deltas, zero_tensor)
+
+    csa_deltas = (muscle_radii + radii_deltas)**2 - muscle_radii**2  # cross-sectional area
+
+    negative_csa_deltas = torch.where(csa_deltas < 0, csa_deltas, cfg.zero_tensor)
+    positive_csa_deltas = torch.where(csa_deltas > 0, csa_deltas, cfg.zero_tensor)
 
     # Atrophy muscle and convert to capital
-    capital.sub_(torch.sum(negative_csa_deltas, dim=1) * efficiency)
-    
-    new_csa_mags = radii**2.0
+    new_csa_mags = muscle_radii**2.0
+    total_capital_before = capital.sum() + new_csa_mags.sum()
     new_csa_mags.add_(negative_csa_deltas)
 
-    # Grow muscle from capital, if possible
-    capital_desired = torch.sum(positive_csa_deltas, dim=1)
-    capital_desired_safe = torch.where(capital_desired == 0, torch.tensor(1.0), capital_desired)
-    csa_delta_distribution = positive_csa_deltas / capital_desired_safe.unsqueeze(1)
+    capital.sub_(torch.sum(negative_csa_deltas, dim=0).mul(growth_efficiency))
 
-    capital_consumed = torch.where(capital_desired > capital, capital, capital_desired)
+    # Grow muscle from capital, if possible
+    total_csa_deltas = torch.sum(positive_csa_deltas, dim=0)
+    total_csa_deltas_safe = torch.where(total_csa_deltas == 0, cfg.one_tensor, total_csa_deltas)
+    csa_delta_distribution = positive_csa_deltas.div(total_csa_deltas_safe.unsqueeze(0))
+    # del total_csa_deltas_safe # TODO: Free CUDA memory? Garbage Collect?  
+
+    capital_consumed = torch.where(total_csa_deltas > capital, capital, total_csa_deltas)
     capital.sub_(capital_consumed)
-    capital_consumed.mul_(efficiency)
-    new_csa_mags.addcmul_(capital_consumed.unsqueeze(1), csa_delta_distribution)
-    torch.mul(torch.sqrt(new_csa_mags), torch.sign(radii + radii_deltas), out=radii)  
+    capital_consumed.mul_(growth_efficiency)
+    # other than inefficiency, exchange rate between capital and muscle area is 1:1 
+    new_csa_mags.addcmul_(capital_consumed.unsqueeze(0), csa_delta_distribution) 
+    # This is allowed because even with no available capital a muscle may invert its polarity or go to 0 at only a cost of inefficiency
+    torch.copysign(torch.sqrt(new_csa_mags), muscle_radii.add(radii_deltas), out=muscle_radii) 
 
-    return radii, capital
+    capital = torch.where(capital < 0.001, cfg.zero_tensor, capital)
+    # assert capital.min() >= 0, "Oops, a cell's capital became negative during growth"
+    capital_diff = (capital.sum() + new_csa_mags.sum()) - total_capital_before
+    # assert capital_diff <= 0, f"Oops, capital was invented during growth. Diff: {capital_diff}"
 
-
-def grow_old(rads_b, rad_deltas_b, capital_b, efficiency_b):
-    csa_deltas_b = (rads_b + rad_deltas_b)**2 - rads_b**2 # cross-sectional area
-
-    # Atrophy muscle and convert to capital
-    capital_b -= torch.sum(torch.where(csa_deltas_b < 0, csa_deltas_b, torch.tensor(0.0)),dim=1) * efficiency_b
-
-    new_csa_mags_b = rads_b**2.0
-    new_csa_mags_b[csa_deltas_b < 0] += csa_deltas_b[csa_deltas_b < 0]
-
-    # Grow myscle from capital, if possible
-    capital_desired_b = torch.sum(torch.where(csa_deltas_b > 0, csa_deltas_b, torch.tensor(0.0)),dim=1)
-    csa_delta_distribution_b = torch.where(csa_deltas_b > 0, csa_deltas_b, torch.tensor(0.0)) / capital_desired_b.unsqueeze(1)
-
-    capital_consumed_b = torch.where(capital_desired_b > capital_b, capital_b, capital_desired_b)
-    csa_grown_b = capital_consumed_b * efficiency_b
-    new_csa_mags_b = torch.where(csa_deltas_b > 0, new_csa_mags_b + csa_grown_b.unsqueeze(1) * csa_delta_distribution_b, new_csa_mags_b)
-
-    capital_b -= capital_consumed_b
-
-    new_rad_mags_b = torch.sqrt(new_csa_mags_b)
-    new_signs = torch.sign(rads_b + rad_deltas_b)
-
-    return new_rad_mags_b * new_signs, capital_b
-
-
-def grow_dumb(rads, rad_deltas, capital, efficiency):
-    activate_muscle_growth = np.vectorize(lambda rads, rad_deltas: (rads + rad_deltas)**2 - rads**2)
-    csa_deltas = activate_muscle_growth(rads, rad_deltas) # cross-sectional area
-    positive_csa_deltas = csa_deltas[csa_deltas > 0]
-    negative_csa_deltas = csa_deltas[csa_deltas < 0]
-
-    # Atrophy muscle and convert to capital
-    capital -= sum(negative_csa_deltas) * efficiency
-    new_csa_mags = rads**2.0
-    new_csa_mags[csa_deltas < 0] += negative_csa_deltas
-
-    # Grow muscle from capital, if possible
-    capital_desired = sum(positive_csa_deltas) # before efficiency loss
-    csa_delta_distribution = positive_csa_deltas / capital_desired
-
-    if capital_desired > capital:
-        capital_consumed = capital
-    else:
-        capital_consumed = capital_desired
-
-    csa_grown = capital_consumed * efficiency
-    new_csa_mags[csa_deltas > 0] += csa_grown * csa_delta_distribution
-
-    capital -= capital_consumed
-
-    new_rad_mags = np.sqrt(new_csa_mags)
-    new_signs = np.sign(rads + rad_deltas)
-
-
-if __name__ == "__main__":
-    # Tests if capital is consumed correctly and radii are updated in place
-
-    import matplotlib.pyplot as plt
-
-    rads_batch = torch.tensor([[-4]], dtype=torch.float32)
-    rad_deltas_batch = torch.tensor([[2]], dtype=torch.float32)
-    capital_batch = torch.tensor([3.0], dtype=torch.float32)
-    efficiency_batch = torch.tensor([1.0], dtype=torch.float32)
-
-    radii_results = []
-    capital_results = []
-    for _ in range(10):
-        out = grow_muscle(rads_batch, rad_deltas_batch, capital_batch, efficiency_batch)
-        radii_results.append(out[0].item())
-        capital_results.append(out[1].item())
-
-    assert torch.isclose(rads_batch, torch.tensor([[4.358899]], dtype=torch.float32), atol=1e-6).all()
-    assert torch.isclose(capital_batch, torch.tensor([0.0], dtype=torch.float32), atol=1e-6).all()
-
-    plt.figure(figsize=(10, 5))
-    plt.plot(radii_results, label='Radii')
-    plt.plot(capital_results, label='capital')
-    plt.xlabel('Iterations')
-    plt.ylabel('Values')
-    plt.title('Growth of Muscle Tissue')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+    return muscle_radii, capital
