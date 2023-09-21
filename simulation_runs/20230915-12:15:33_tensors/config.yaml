@@ -1,0 +1,138 @@
+environment:
+  boundary_condition: torus
+  channels:
+  - food
+  - poison
+  - obstacle
+  - chemoattractant
+  - chemorepellant
+  chemoattractant_params:
+    dropoff: 1
+    iterations: 300
+  chemorepellant_params:
+    dropoff: 1
+    iterations: 300
+  food_generation: levy_dust
+  food_generation_params:
+    alpha:
+    - 0.1
+    - 2
+    beta:
+    - -1
+    - 1
+    num_food:
+    - 50
+    - 500
+    pad:
+    - 0
+    - 5
+  height: 100
+  obstacle_generation: perlin_noise
+  obstacle_generation_params:
+    frequency:
+    - 4.0
+    - 16.0
+    lacunarity:
+    - 1.5
+    - 3.0
+    obstacle_generation_params: null
+    octaves:
+    - 1
+    - 4
+    persistence:
+    - 0.25
+    - 1.0
+    threshold:
+    - 0.05
+    - 0.2
+  poison_generation: levy_dust
+  poison_generation_params:
+    alpha:
+    - 0.1
+    - 2
+    beta:
+    - -1
+    - 1
+    num_poison:
+    - 20
+    - 200
+    pad:
+    - 0
+    - 5
+  width: 100
+interactive_sim:
+  enable: true
+  fps: 10
+  save: false
+  save_chemo_alpha: 0.5
+  save_colormaps:
+    chemoattractant: Greens
+    chemorepellant: Oranges
+    food: Greens
+    obstacle: binary
+    poison: Oranges
+  save_end: 100
+  save_every: 1
+  save_format: gif
+  save_fps: 10
+  save_name: interactive_sim
+  save_path: ALife2023/interactive_sim
+  save_start: 0
+lifecycle:
+  inoculation:
+    num_spores: 3
+    selection_procedure: random
+    where_to_place: on_food
+  spore_params:
+    initial_communication: random
+    initial_muscle: 1.0
+    initial_storage: 1.0
+  stoppage:
+    condition: iterations
+    stoppage_final: 0
+    stoppage_range:
+    - 500
+    - 1500
+physics:
+  cytoplasm_absorption_rate: 0.1
+  exchange_rates:
+    cytoplasm_to_storage: 0.5
+    food_to_cytoplasm: 5.0
+    muscle_contraction_cost: 0.2
+    storage_to_muscle: 0.7
+  min_storage: 0.1
+  muscle_max_size: 2.0
+  muscle_to_storage_atrophy_rate: 0.1
+  storage_max_units: 10
+physiology:
+  actuators:
+  - rotate
+  - contraction
+  - delta_muscle
+  - delta_storage
+  channels:
+  - muscle
+  - cytoplasm
+  - storage
+  - communication
+  num_actuators: 17
+  num_communication_channels: 10
+  perception_channels:
+  - obstacle
+  - chemoattractant
+  - chemorepellant
+  - muscle
+  - cytoplasm
+  - storage
+  - communication
+  perception_kernel:
+    kernel_radius: 1
+    kernel_type: moore
+visualize:
+  chemo_alpha: 2
+  colormaps:
+    chemoattractant: Greens
+    chemorepellant: Oranges
+    food: Greens
+    obstacle: binary
+    poison: Oranges

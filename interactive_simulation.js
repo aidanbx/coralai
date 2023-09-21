@@ -1,39 +1,55 @@
-// Initialize Pixi app
-const app = new PIXI.Application({width: window.innerWidth, height: window.innerHeight});
-document.body.appendChild(app.view);
+import * as d3 from 'd3';
 
-// Generate hexagonal grid
-function generateHexGrid() {
-    const screenWidth = window.innerWidth;
-    const screenHeight = window.innerHeight;
+const directoryPath = 'simulation_runs';
+const timeSeriesData = []
 
-    const hexSize = Math.min(screenWidth / len, screenHeight / width);
+const radius = 10;
+const xOffset = radius * 0.5;
+const yOffset = radius * Math.sqrt(3) / 2;
 
-    const numHexagonsX = Math.floor(screenWidth / hexSize);
-    const numHexagonsY = Math.floor(screenHeight / hexSize);
+function generateHexGrid(width, height) {
+  const points = [];
 
-    // Calculate the total number of hexagons
-    const totalHexagons = numHexagonsX * numHexagonsY;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const point = {
+        x: x * (radius + xOffset) + y % 2,
+        y: y * yOffset
+      };
+      points.push(point);
+    }
 
-    // Your code to draw the hexagons goes here
+    isOffsetRow = !isOffsetRow;
+  }
 
+  return points;
 }
 
-// Update hexagon state and color
-function updateHexagonState(hexagon) {
-  // Your code to update the state and color of a hexagon goes here
+function main() {
+  const configPath = path.join(__dirname, 'simulation_runs/20230915_12:15:33_tensors/config.yaml');
+  const configData = fs.readFileSync(configPath, 'utf8');
+  const config = yaml.safeLoad(configData);
+
+  const width = config.environment.width;
+  const height = config.environment.height;
+
+  points = generateHexGrid(width, heigh)
+  
+
+  // Draw points on a screen
+  const svg = d3.select("body")
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+  svg.selectAll("circle")
+    .data(points)
+    .enter()
+    .append("circle")
+    .attr("cx", (d) => d.x)
+    .attr("cy", (d) => d.y)
+    .attr("r", radius);
+  
 }
 
-// Handle mouse events
-function handleMouseEvents() {
-  // Your code to handle mouse events (dragging, clicking, etc.) goes here
-}
-
-// Start visualization code
-function initViz() {
-  generateHexGrid();
-  handleMouseEvents();
-}
-
-
-initViz();
+main()
