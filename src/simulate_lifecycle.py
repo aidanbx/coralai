@@ -163,7 +163,6 @@ def init_live_channels(config: dict):
     live_channels = np.zeros((n_live_channels, width, height))
     return live_channels
 
-<<<<<<<< HEAD:simulation/simulate_lifecycle.py
 
 def check_config(config_object: dict) -> None:
     assert isinstance(config_object, dict), "config must be a dict object"
@@ -181,9 +180,7 @@ def check_config(config_object: dict) -> None:
         + config_object["physiology"]["actuators"]
     ):
         assert channel in all_channels, f"Channel {channel} not found in all_channels"
-========
->>>>>>>> origin/master:src/simulate_lifecycle.py
-    
+
 
 def simulate_lifecycle(config: dict, env_channels: np.array, physiology: callable) -> dict: 
     config = check_config(config)
