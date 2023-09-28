@@ -14,5 +14,4 @@ include/
 *.log
 .env
 .venv/
-*.sqlite3
-
+.vscode/

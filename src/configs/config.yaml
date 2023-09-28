@@ -90,14 +90,7 @@ physiology:
   num_actuators: 17
 
   perception_kernel:
-<<<<<<< HEAD:simulation/config.yaml
-    kernel_type: "moore" # FIND A KERNEL THAT WORKS WITH HEXAGONS, other than 1/6 everything?
-    kernel_radius: 1
-=======
     kernel_type: "moore"
->>>>>>> origin/master:config.yaml
-
-# MAKE GENERAL KERNAL for all the johns
 
 physics:
   adjacency_kernel:

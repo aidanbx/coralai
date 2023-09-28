@@ -215,8 +215,6 @@ def check_config(config_object: dict) -> None:
 
 
 def generate_env(config: dict, visualize: bool = False) -> np.array:
-    check_config(config)
-
     env_channels = init_env_channels(config)
     populate_env_channels(config, env_channels)
     remove_overlap(config, env_channels)

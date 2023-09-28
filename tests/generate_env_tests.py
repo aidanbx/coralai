@@ -1,4 +1,4 @@
-from generate_env import *
+from ..generate_env import *
 
 import yaml
 import visualize
