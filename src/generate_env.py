@@ -1,5 +1,3 @@
-
-
 # %% 
 from matplotlib import animation
 import numpy as np
@@ -12,12 +10,11 @@ import random
 import matplotlib.pyplot as plt
 
 import importlib
-import visualize
+import src.visualize as visualize
 importlib.reload(visualize)
 
-import tester
+import src.tester as tester
 importlib.reload(tester)
-
 
 if __name__ == "__main__":
     verbose = True # For testing

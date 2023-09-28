@@ -11,7 +11,7 @@ import cv2  # You might need OpenCV for HSV conversions
 import yaml
 
 import importlib
-import tester 
+import src.tester as tester
 importlib.reload(tester)
 
 # %% Load Config---------------------------------------------------------------

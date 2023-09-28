@@ -2,66 +2,8 @@ import torch
 import numpy as np
 from typing import Tuple
 import importlib
-import EINCASMConfig
+import src.EINCASMConfig as EINCASMConfig
 importlib.reload(EINCASMConfig)
-
-
-def activate_muscles_and_flow(cfg: EINCASMConfig, capital: torch.Tensor, muscle_radii: torch.Tensor,
-                              activations: torch.Tensor, flow_efficiency: torch.Tensor) -> torch.Tensor:
-    """
-    Function to activate muscles and simulate flow of cytoplasm. Modifies the capital tensor in-place.
-
-    Parameters:
-    capital (torch.Tensor): The capital present in each cell. Shape: (width, height)
-    muscle_radii (torch.Tensor): The radii of the muscles of each cell. Shape: (kernel_size, width, height)
-    activations (torch.Tensor): The activation levels of the muscles. Shape: (width, height)
-    flow_efficiency (torch.Tensor): The efficiency of flow. Shape: (width, height)
-    kernel (torch.Tensor): The kernel for exchanging capital. Shape: (kernel_size, num_dims)
-
-    Returns:
-    torch.Tensor: The updated capital tensor.
-    """
-    total_capital_before = capital.sum()
-    assert capital.min() >= 0, "Capital cannot be negative"
-
-    cfg.one_tensor = torch.tensor([1.0], device=cfg.device, dtype=cfg.float_dtype)
-
-    # Invert negative flows across kernel
-    roll_shift = (len(cfg.kernel)-1)//2
-    flows = (torch.sign(muscle_radii) * (muscle_radii ** 2)).mul(activations)    # Activation is a percentage (kinda) of CSA
-    positive_flows = torch.where(flows[1:] > 0, flows[1:], cfg.zero_tensor)
-    negative_flows = torch.where(flows[1:] < 0, flows[1:], cfg.zero_tensor)
-    flows[1:] = positive_flows.sub(torch.roll(negative_flows, roll_shift, dims=0))
-    flows[0] = torch.abs(flows[0])
-    del positive_flows, negative_flows
-
-    # Distribute cytoplasm across flows
-    total_flow_desired = torch.sum(flows, dim=0)
-    total_flow_desired_safe = torch.where(total_flow_desired == 0, cfg.one_tensor, total_flow_desired)
-    flow_distribution = flows.div(total_flow_desired_safe.unsqueeze(0))
-    del total_flow_desired_safe
-
-    total_capital_outflow = torch.where(total_flow_desired > capital, capital, total_flow_desired)
-    capital.sub_(total_capital_outflow)
-    assert capital.min() >= 0, "Oops, capital became negative during flow"
-    total_capital_outflow.mul_(flow_efficiency)
-    torch.mul(total_capital_outflow.unsqueeze(0), flow_distribution, out=flows)
-
-    # Exchange capital according to the kernel
-    received_capital = torch.sum(
-                            torch.stack(
-                                [torch.roll(flows[i], shifts=tuple(map(int, cfg.kernel[i])), dims=[0, 1])
-                                for i in range(cfg.kernel.shape[0])]
-                            ), dim=0
-                        )
-    capital.add_(received_capital)
-    del received_capital
-
-    capital = torch.where(capital < 0.001, cfg.zero_tensor, capital)
-    assert total_capital_before >= capital.sum(), "Capital must be lost in the system"
-
-    return capital
-
 
 def generate_muscle_masks(cfg: EINCASMConfig, open_cells: torch.Tensor) -> torch.Tensor:
     directional_masks = torch.ones((cfg.kernel.shape[0], *open_cells.shape), device=cfg.device, dtype=torch.bool)
@@ -70,7 +12,6 @@ def generate_muscle_masks(cfg: EINCASMConfig, open_cells: torch.Tensor) -> torch
     
     muscle_masks = directional_masks&open_cells
     return muscle_masks
-
 
 def grow_muscle_csa(cfg: EINCASMConfig, muscle_radii: torch.Tensor, radii_deltas: torch.Tensor,
                 capital: torch.Tensor, growth_efficiency: torch.Tensor,
@@ -132,3 +73,84 @@ def grow_muscle_csa(cfg: EINCASMConfig, muscle_radii: torch.Tensor, radii_deltas
     # assert capital_diff <= 0, f"Oops, capital was invented during growth. Diff: {capital_diff}"
 
     return muscle_radii, capital
+
+
+def activate_muscles(cfg: EINCASMConfig, muscle_radii: torch.Tensor, activations: torch.Tensor) -> torch.Tensor:
+    return (torch.sign(muscle_radii) * (muscle_radii ** 2)).mul(activations)    # Activation is a percentage (kinda) of CSA
+
+def activate_and_mine_ports(cfg: EINCASMConfig, capital: torch.Tensor, port: torch.Tensor, mine_efficiency: torch.Tensor,
+                            dispersal_rate: torch.Tensor, mine_muscle_radii: torch.Tensor, mine_activation: torch.Tensor,
+                            regeneration_rate: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        available = port * dispersal_rate
+        extraction = activate_muscles(cfg, mine_muscle_radii, mine_activation)
+        extracted = torch.clamp(extraction, -capital, available)
+        capital_flow = torch.where(extracted > 0, extracted * mine_efficiency, extracted)
+        port_flow = torch.where(extracted < 0, extracted * mine_efficiency, extracted)
+        
+        capital += capital_flow
+        port -= port_flow
+
+        port += regeneration_rate
+
+        return port, capital
+
+
+def activate_muscles_and_flow(cfg: EINCASMConfig, capital: torch.Tensor, muscle_radii: torch.Tensor,
+                              activations: torch.Tensor, flow_efficiency: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Function to activate muscles and simulate flow of cytoplasm. Modifies the capital tensor in-place.
+
+    Parameters:
+    capital (torch.Tensor): The capital present in each cell. Shape: (width, height)
+    muscle_radii (torch.Tensor): The radii of the muscles of each cell. Shape: (kernel_size, width, height)
+    activations (torch.Tensor): The activation levels of the muscles. Shape: (width, height)
+    flow_efficiency (torch.Tensor): The efficiency of flow. Shape: (width, height)
+    kernel (torch.Tensor): The kernel for exchanging capital. Shape: (kernel_size, num_dims)
+
+    Returns:
+    torch.Tensor: The updated capital tensor.
+    """
+    total_capital_before = capital.sum()
+    assert capital.min() >= 0, "Capital cannot be negative"
+
+    cfg.one_tensor = torch.tensor([1.0], device=cfg.device, dtype=cfg.float_dtype)
+
+    # Invert negative flows across kernel
+    roll_shift = (len(cfg.kernel)-1)//2
+    flows = activate_muscles(cfg, muscle_radii, activations)
+    positive_flows = torch.where(flows[1:] > 0, flows[1:], cfg.zero_tensor)
+    negative_flows = torch.where(flows[1:] < 0, flows[1:], cfg.zero_tensor)
+    flows[1:] = positive_flows.sub(torch.roll(negative_flows, roll_shift, dims=0))
+    flows[0] = torch.abs(flows[0])
+    del positive_flows, negative_flows
+
+    # Distribute cytoplasm across flows
+    total_flow_desired = torch.sum(flows, dim=0)
+    total_flow_desired_safe = torch.where(total_flow_desired == 0, cfg.one_tensor, total_flow_desired)
+    flow_distribution = flows.div(total_flow_desired_safe.unsqueeze(0))
+    del total_flow_desired_safe
+
+    total_capital_outflow = torch.where(total_flow_desired > capital, capital, total_flow_desired)
+    capital.sub_(total_capital_outflow)
+    assert capital.min() >= 0, "Oops, capital became negative during flow"
+    total_capital_outflow.mul_(flow_efficiency)
+    torch.mul(total_capital_outflow.unsqueeze(0), flow_distribution, out=flows)
+
+    # Exchange capital according to the kernel
+    received_capital = torch.sum(
+                            torch.stack(
+                                [torch.roll(flows[i], shifts=tuple(map(int, cfg.kernel[i])), dims=[0, 1])
+                                for i in range(cfg.kernel.shape[0])]
+                            ), dim=0
+                        )
+    capital.add_(received_capital)
+    del received_capital
+
+    capital = torch.where(capital < 0.001, cfg.zero_tensor, capital)
+    assert total_capital_before >= capital.sum(), "Capital must be lost in the system"
+
+    return capital, flows
+
+
+def run_physics(cfg: EINCASMConfig, env_channels: torch.Tensor, live_channels: torch.Tensor) -> torch.Tensor:
+    
