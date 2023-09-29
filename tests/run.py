@@ -1,11 +1,16 @@
-import yaml
+import os
+import sys
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+module_dir = os.path.join(current_dir, "../src/")
+sys.path.append(module_dir)
 
 import generate_env as genv
 import simulate_lifecycle as sim
+import eincasm_config
 
 def main():
-    with open('./config.yaml', 'r') as file:
-        config = yaml.load(file, Loader=yaml.FullLoader)
+    config = eincasm_config.Config('./config.yaml')
     
     env_channels = genv.generate_env(config)
 

@@ -196,24 +196,6 @@ def init_env_channels(config: dict) -> np.array:
     return env_channels
 
 
-def check_config(config_object: dict) -> None: 
-    assert isinstance(config_object, dict), "config must be a dict object"
-
-    # Assert if alpha and beta values are within the valid range
-
-    # Food
-    assert 0 < config_object["environment"]["food_generation_params"]["alpha"][0] <= 2
-    assert config_object["environment"]["food_generation_params"]["alpha"][1] <= 2
-    assert -1 <= config_object["environment"]["food_generation_params"]["beta"][0] <= 1
-    assert -1 <= config_object["environment"]["food_generation_params"]["beta"][1] <= 1
-
-    # Poison
-    assert 0 < config_object["environment"]["poison_generation_params"]["alpha"][0] <= 2
-    assert config_object["environment"]["poison_generation_params"]["alpha"][1] <= 2
-    assert -1 <= config_object["environment"]["poison_generation_params"]["beta"][0] <= 1
-    assert -1 <= config_object["environment"]["poison_generation_params"]["beta"][1] <= 1
-
-
 def generate_env(config: dict, visualize: bool = False) -> np.array:
     env_channels = init_env_channels(config)
     populate_env_channels(config, env_channels)

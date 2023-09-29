@@ -1,5 +1,3 @@
-import yaml
-
 def ensure_min_storage(config, cell, live_channels):
     storage_on_cell = live_channels[config["physiology"]["channels"].index("storage")][cell[0], cell[1]]
     cytoplasm_on_cell = live_channels[config["physiology"]["channels"].index("cytoplasm")][cell[0], cell[1]]

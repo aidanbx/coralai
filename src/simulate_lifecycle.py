@@ -164,24 +164,6 @@ def init_live_channels(config: dict):
     return live_channels
 
 
-def check_config(config_object: dict) -> None:
-    assert isinstance(config_object, dict), "config must be a dict object"
-    
-    all_channels = (
-        config_object["environment"]["channels"]
-        + config_object["physiology"]["channels"]
-        + config_object["physiology"]["perception_channels"]
-        + config_object["physiology"]["actuators"]
-    )
-
-    # Ensure all perception and action channels exist
-    for channel in (
-        config_object["physiology"]["perception_channels"]
-        + config_object["physiology"]["actuators"]
-    ):
-        assert channel in all_channels, f"Channel {channel} not found in all_channels"
-
-
 def simulate_lifecycle(config: dict, env_channels: np.array, physiology: callable) -> dict: 
     config = check_config(config)
     live_channels = init_live_channels(config)

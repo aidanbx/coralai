@@ -1,16 +1,19 @@
-from ..generate_env import *
+import os
+import sys
 
-import yaml
-import visualize
+from ..src.generate_env import *
+# import src.generate_env as genv
+# import src.eincasm_config as eincasm_config
+# import src.visualize as visualize
 import tester
 
 # TEST: 0
 # ---------------
-with open("./config.yaml", "r") as yaml_file:
-    config = yaml.safe_load(yaml_file)
+config = eincasm_config.Config('./config.yaml')
+
 
 verbose = True
-tester.test(lambda: generate_env(config, visualize=True),
+tester.test(lambda: genv.generate_env(config, visualize=True),
             "Generate Environment",
             verbose,
             lambda result, title: visualize.show_image(result[1]))
