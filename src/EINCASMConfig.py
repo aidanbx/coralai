@@ -12,7 +12,6 @@ class Config:
         self.update_device(config['torch']['device']) # Refactor these two?
         
         self.update_kernel(config.get('kernel', None))
-        
         self.env_config = config.get('environment', None)
         self.weather_config = config.get('weather', None)
         self.live_config = config.get('perception', None)

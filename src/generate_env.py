@@ -95,7 +95,7 @@ def discretize_levy_dust(dust: np.array, channel: np.array, pad: int = 0) -> np.
 
 
 def levy_dust(shape: tuple, points: int, alpha: float, beta: float, pad: int = 0) -> np.array:
-    angle = uniform.rvs(size=(points,), loc=.0, scale=2.*np.pi)
+    angle = uniform.rvs(size=(points,), loc=.0, scale=2.*np.pi) 
 
     step_length = abs(levy_stable.rvs(alpha, beta, size=points))
 

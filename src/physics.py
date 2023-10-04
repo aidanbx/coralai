@@ -152,5 +152,5 @@ def activate_muscles_and_flow(cfg: EINCASMConfig, capital: torch.Tensor, muscle_
     return capital, flows
 
 
-def run_physics(cfg: EINCASMConfig, env_channels: torch.Tensor, live_channels: torch.Tensor) -> torch.Tensor:
+# def run_physics(cfg: EINCASMConfig, env_channels: torch.Tensor, live_channels: torch.Tensor) -> torch.Tensor:
     
