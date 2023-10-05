@@ -8,44 +8,78 @@ dimensions: 2
 kernel: [
   [0, 0],     # ORIGIN
   [-1, 0],    # UP
-  [0, 1.0],   # RIGHT
+  [0, 1],     # RIGHT
   [1, 0],     # DOWN
   [0, -1]     # LEFT
 ]
 
-environment:
-  width: 100
-  height: 100
-  boundary_condition: "torus"
-  channels: 
-    - "source_sink"
-    - "obstacle"
-    - "scent"
+world_shape: [100, 100]
 
-  source_generation: "levy_dust"
-  source_generation_params:
+num_communication_channels: 5
+num_resource_types: 3
+
+weather:
+  channels:
+    - "regeneration_rate"
+    - "dispersal_rate"
+    - "mine_efficiency"
+    - "flow_efficiency"
+    - "growth_efficiency"
+
+live:
+  num_signals: 10
+  chanels:
+    - "capital"
+    - "mine_muscle_radius"
+    - "flow_muscle_radii"   # len(kernel) channels
+    - "signals"             # num_signals channels
+
+physiological:
+  channels:
+    - "flow_residuals"      # len(kernel) channels
+    - "muscle_radii_deltas" # len(kernel) + 1 (for mine muscle) channels
+    - "flow_activation"
+    - "mine_activation"
+  
+  kernel_perceptive_channels: # Can see a kernel of these channels around it
+    - "capital"
+    - "scent"
+    - "flow_residuals"
+    - "signal"
+  
+  self_perceived_channels:
+    - "muscle_radii"    # len(kernel) + 1 (for mine muscle) channels
+
+environment:
+  channels: 
+    - "port"
+    - "open_cell"
+    - "scent"
+  resource_generation:
+    distribution: "levy_dust"
     pad: [0, 5] # these are ranges, low high
     alpha: [0.1, 2]
     beta: [-1, 1] 
     num_source: [50, 500]
 
-  sink_generation: "levy_dust"
-  sink_generation_params:
+  sink_generation:
+    distribution: "levy_dust"
     pad: [0, 5]
     alpha: [0.1, 2]
     beta: [-1, 1]
     num_sink: [20, 200]
 
-  obstacle_generation: "perlin_noise"
-  obstacle_generation_params:
-    obstacle_generation_params:
-    threshold: [0.05, 0.2]
-    frequency: [4.0, 16.0]
-    octaves: [1, 4]
-    persistence: [0.25, 1.0]
-    lacunarity: [1.5, 3.0]
+  obstacle_generation:
+    method: "simplex_noise"
+    empty_threshold: [0.05, 0.1]
+    full_threshold: [0.8, 0.9]
+    frequency: [4.0, 30.0]
+    octaves: [3, 10]
+    persistence: [0.2, 1.0]
+    lacunarity: [1.5, 4.0]
 
-  scent_params:
+  scent_generation:
+    distribution: "gaussian_blur"
     iterations: 300
     dropoff: 1
 
@@ -68,40 +102,4 @@ lifecycle:
     stoppage_range: [500, 1500] 
     stoppage_final: 0 # placeholder randomly updated
 
-physiology:  
-  channels:
-    - "mass"      # Multiple channels each representing the weight between adjacent cells in the order of the kernel
-    - "capital" 
-    - "signals"   # Multiple channels
 
-  perception_channels: # Note: cannot see food itself, only the scent
-    - "obstacle"
-    - "scent"
-    - "mass_vector"
-    - "capital"
-    - "signals"
-
-  actuators:
-    - "rotate"      # %change in direction of flow, energy cost proportional to muscle size
-    - "contract"    # %change in reservoir size (muscle) -- multiplied by open % TODO: Refractory period?
-    - "grow"
-
-  num_communication_channels: 10
-  num_actuators: 17
-
-  perception_kernel:
-    kernel_type: "moore"
-
-physics:
-  adjacency_kernel:
-    kernel_type: "moore"
-
-  capital_absorption_rate: 0.1
-  exchange_rates:
-    food_to_capital: 5.0        # 1 food -> 5 capital 
-    capital_to_muscle: 0.7       # 1 capital -> 0.7 muscle
-    muscle_contraction_cost: 0.2  
-  min_mass: 0.1
-  muscle_max_size: 2.0
-  muscle_to_storage_atrophy_rate: 0.1
-  network_complexity_cost: 0.1 
