@@ -29,13 +29,13 @@ def torch_rot_and_signals():
     X, Y = torch.meshgrid(x, y)
 
     gs = gridspec.GridSpec(2, 2, width_ratios=[1, 4], height_ratios=[4, 1])
-
     fig = plt.figure(figsize=(8, 8))
 
     ax_main = plt.subplot(gs[0, 1])
     ax_x = plt.subplot(gs[1, 1])
     ax_y = plt.subplot(gs[0, 0])
     ax_signals = [plt.subplot(gs[1, 0], position=[i/num_signals, 0, 1/num_signals, 1]) for i in range(num_signals)]
+    
     for ax in ax_signals:
         ax.axis('off')
 
@@ -90,9 +90,6 @@ def torch_rot():
     y = torch.linspace(0, np.pi*2, height)
     X, Y = torch.meshgrid(x, y)
 
-    signals = [generate_signal(freqs[i], periods[i], amps[i], rots[i], X, Y) for i in range(num_signals)]
-    # combined_signal = sum(signals)
-
     def update(period):
         signals = [generate_signal(freqs[i], period, amps[i], rots[i], X, Y) for i in range(num_signals)]
         combined_signal = sum(signals)
@@ -107,7 +104,6 @@ def torch_rot():
 
 
 def separate_xy_signals():
-
     num_x_signals = 2
     num_y_signals = 2
     num_signals = num_x_signals + num_y_signals
@@ -165,6 +161,73 @@ def separate_xy_signals():
     ax_y.invert_xaxis()
     plt.show()
 
+def wacky_rot():
+    # Shared parameters and signal generation
+    num_signals = 4
+    min_freq, max_freq = 0.1, np.pi*2
+    min_rot, max_rot = 0, np.pi
+    min_amp, max_amp = 1, 1
+    noise_scale = 0.05  # Added noise scale
+
+    freqs = torch.rand(num_signals) * (max_freq - min_freq) + min_freq
+    rots = torch.rand(num_signals) * (max_rot - min_rot) + min_rot
+    amps = torch.rand(num_signals) * (max_amp - min_amp) + min_amp
+    periods = torch.zeros(num_signals)
+
+    width, height = 200, 200
+    min_angle, max_angle = -np.pi, np.pi
+    x = torch.linspace(min_angle, max_angle, width)
+    y = torch.linspace(min_angle, max_angle, height)
+    X, Y = torch.meshgrid(x, y)
+
+    def generate_signal(freq, period, amplitude, rot, X, Y):
+        noise = torch.randn_like(X) * noise_scale  # Added noise
+        return (amplitude * torch.sin(freq * X * torch.cos(rot) - Y * torch.sin(rot) + period) +
+                amplitude * torch.cos(freq * X * torch.sin(rot) + Y * torch.cos(rot) + period)) + noise
+
+    # Visualization using GridSpec
+    fig = plt.figure(figsize=(12, 8))
+    gs = gridspec.GridSpec(2, 2, height_ratios=[1, 0.25])  # 3 rows and 2 columns
+
+    ax1 = fig.add_subplot(gs[0, 0])  # Top-left plot
+    ax2 = fig.add_subplot(gs[0, 1])  # Top-right plot
+    ax3 = fig.add_subplot(gs[1, :])  # Bottom plot spanning both columns and 2 rows for thinness
+
+    def update(period):
+        # 1D wacky signals
+        noise = torch.randn_like(x) * noise_scale
+        unrotated_signals = [amps[i] * torch.sin(freqs[i] * x + period) + noise for i in range(num_signals)]
+        x_prime = [torch.cos(rots[i]) * x - torch.sin(rots[i]) * unrotated_signals[i] + noise for i in range(num_signals)]
+        y_prime = [torch.sin(rots[i]) * x + torch.cos(rots[i]) * unrotated_signals[i] for i in range(num_signals)]
+
+        ax1.clear()
+        for i in range(num_signals):
+            ax1.plot(x_prime[i], y_prime[i])
+        ax1.set_xlim([min_angle, max_angle])  # Set x limits
+        ax1.set_ylim([min_angle, max_angle])  # Set y limits
+        
+        # 2D signals
+        signals = [generate_signal(freqs[i], period, amps[i], rots[i], X, Y) for i in range(num_signals)]
+        combined_signal = sum(signals)
+        ax2.clear()
+        ax2.imshow(combined_signal, cmap='gray', vmin=-max_amp*num_signals, vmax=max_amp*num_signals)  # Set min and max values for colormap
+
+        # Sum of unrotated signals
+        sum_signal = sum(unrotated_signals)
+        ax3.clear()
+        for signal in unrotated_signals:
+            ax3.plot(x.numpy(), signal.numpy(), 'r--', alpha=0.3)
+        ax3.plot(x.numpy(), sum_signal.numpy(), 'b-', linewidth=2)
+        ax3.set_xlim([min_angle, max_angle])  # Set x limits
+        ax3.set_ylim([-max_amp*num_signals, max_amp*num_signals])  # Set y limits
+
+    ani = FuncAnimation(fig, update, frames=np.linspace(min_angle*2, max_angle*2, 100), interval=50)
+    plt.tight_layout()
+    plt.show()
+
 # separate_xy_signals()
 # torch_rot()
-torch_rot_and_signals()
+# torch_rot_and_signals()
+wacky_rot()
+
+

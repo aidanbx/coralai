@@ -6,7 +6,8 @@ class Config:
         with open(config_file, 'r') as file:
             config = yaml.safe_load(file)
 
-        self.dimensions = config.get('dimensions', None)
+        self.dimensions = config.get('dimensions', 2)
+        self.world_shape = config.get('world_shape', [100,100])
         self.kernel = None
         self.update_float_dtype(config['torch'].get('dtype', 'float32'))
         self.update_device(config['torch']['device']) # Refactor these two?
@@ -16,6 +17,11 @@ class Config:
         self.weather_config = config.get('weather', None)
         self.live_config = config.get('perception', None)
         self.physiological_config = config.get('physiology', None)
+
+        self.num_communication_channels = config.get('num_communication_channels', 0)
+        self.num_resource_types = config.get('num_resource_types', 0)
+
+        self.num_muscles = self.kernel.shape[0] + 2 # Flow muscles for kernel + mine + resource muscles
 
 
     def update_kernel(self, kernel):
