@@ -76,7 +76,13 @@ def populate_obstacle(channel: np.array, config=None):
             channel[x,y] = value
     
     # Normalize the channel
-    channel = (channel - np.min(channel)) / (np.max(channel) - np.min(channel))
+    min_val = np.min(channel)
+    max_val = np.max(channel)
+    if max_val != min_val:
+        channel = (channel - min_val) / (max_val - min_val)
+    else:
+        channel = np.zeros_like(channel)
     channel = np.where(channel > full_threshold, 1, channel)
     channel = np.where(channel < empty_threshold, 0, channel)
+    assert channel.min() >= 0, "Obstacles cannot be negative (during generation)"
     return channel

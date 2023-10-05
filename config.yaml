@@ -13,7 +13,7 @@ kernel: [
   [0, -1]     # LEFT
 ]
 
-world_shape: [100, 100]
+world_shape: [50, 50]
 
 num_communication_channels: 5
 num_resource_types: 3

@@ -1,8 +1,6 @@
 import numpy as np
 
 def generate_random_states():
-    
-
     state_tensor = np.random.uniform(low=-1, high=1, size=(7, 10, 10))
     for i in range(100):
         state_tensor[0] = np.random.uniform(low=-1, high=1, size=(10, 10)) # activations
