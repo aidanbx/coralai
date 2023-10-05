@@ -15,4 +15,5 @@ include/
 .env
 .venv/
 *.sqlite3
+fake_data/
 
