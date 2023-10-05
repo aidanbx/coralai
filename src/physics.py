@@ -70,28 +70,36 @@ def grow_muscle_csa(cfg: EINCASMConfig, muscle_radii: torch.Tensor, radii_deltas
     return muscle_radii, capital
 
 
-def activate_muscles(cfg: EINCASMConfig, muscle_radii: torch.Tensor, activations: torch.Tensor) -> torch.Tensor:
+def activate_muscles(muscle_radii: torch.Tensor, activations: torch.Tensor) -> torch.Tensor:
     return (torch.sign(muscle_radii) * (muscle_radii ** 2)).mul(activations)    # Activation is a percentage (kinda) of CSA
 
-def activate_and_mine_ports(cfg: EINCASMConfig, capital: torch.Tensor, port: torch.Tensor, mine_efficiency: torch.Tensor,
-                            dispersal_rate: torch.Tensor, mine_muscle_radii: torch.Tensor, mine_activation: torch.Tensor,
-                            regeneration_rate: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        available = port * dispersal_rate
-        extraction = activate_muscles(cfg, mine_muscle_radii, mine_activation)
-        extracted = torch.clamp(extraction, -capital, available)
-        capital_flow = torch.where(extracted > 0, extracted * mine_efficiency, extracted)
-        port_flow = torch.where(extracted < 0, extracted * mine_efficiency, extracted)
-        
-        capital += capital_flow
-        port -= port_flow
 
-        port += regeneration_rate
+def activate_mine_muscles(mine_muscle_radii, mine_activation, capital, obstacle, waste, mining_cost):
+    desired_delta = activate_muscles(mine_muscle_radii, mine_activation)
+    torch.clamp(desired_delta,
+                min=torch.max(-waste, -capital/mining_cost),
+                max=torch.min(obstacle, capital/mining_cost),
+                out=desired_delta)
+    capital -= desired_delta*mining_cost
+    obstacle -= desired_delta
+    waste += desired_delta
 
-        return port, capital
+# TODO: REALLY? NEGATIVE CAPITAL
+def activate_port_muscles(capital: torch.Tensor, port: torch.Tensor, port_muscle_radii: torch.Tensor,
+                          port_activations: torch.Tensor, port_cost: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    desired_delta = activate_muscles(port_muscle_radii, port_activations)
+    torch.clamp(desired_delta,
+                min=-capital.div(1/port_cost),
+                max=torch.min(capital/port_cost, torch.abs(port)), # Poison costs the same to pump out
+                out=desired_delta)
+    capital -= desired_delta * port_cost
+    capital += torch.copysign(desired_delta,torch.sign(port)) # can produce negative capital
+    port -= desired_delta
+    return capital, port
 
 
 def activate_flow_muscles(cfg: EINCASMConfig, capital: torch.Tensor, waste: torch.Tensor, flow_muscle_radii: torch.Tensor,
-                              flow_activations: torch.Tensor, flow_efficiency: torch.Tensor,
+                              flow_activations: torch.Tensor, flow_cost: torch.Tensor,
                               obstacles: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Function to activate muscles and simulate flow of cytoplasm. Modifies the capital tensor in-place.
@@ -116,7 +124,7 @@ def activate_flow_muscles(cfg: EINCASMConfig, capital: torch.Tensor, waste: torc
 
     # Invert negative flows across kernel
     roll_shift = (len(cfg.kernel)-1)//2
-    flows = activate_muscles(cfg, flow_muscle_radii, flow_activations)
+    flows = activate_muscles(flow_muscle_radii, flow_activations)
     positive_flows = torch.where(flows[1:] > 0, flows[1:], cfg.zero_tensor)
     negative_flows = torch.where(flows[1:] < 0, flows[1:], cfg.zero_tensor)
     flows[1:] = positive_flows.sub(torch.roll(negative_flows, roll_shift, dims=0))
@@ -129,9 +137,9 @@ def activate_flow_muscles(cfg: EINCASMConfig, capital: torch.Tensor, waste: torc
     flow_distribution = flows.div(total_flow_desired_safe.unsqueeze(0))
     del total_flow_desired_safe
 
-    max_flow_possible = torch.min(capital + waste, capital.mul(1-flow_efficiency))
-    total_flow = torch.where(total_flow>max_flow_possible,max_flow_possible,total_flow)
-    capital.sub_(total_flow.mul(1-flow_efficiency))  # enforce cost of flow before distributing
+    max_flow_possible = torch.min(capital + waste, capital.div(1+flow_cost))
+    total_flow = torch.where(total_flow > max_flow_possible, max_flow_possible, total_flow)
+    capital.sub_(total_flow.mul(flow_cost))  # enforce cost of flow before distributing
 
     mass = capital + waste
     percent_waste = waste.div(torch.where(mass == 0, cfg.one_tensor, mass))
@@ -162,13 +170,14 @@ def activate_flow_muscles(cfg: EINCASMConfig, capital: torch.Tensor, waste: torc
     waste.add_(received_waste)
     del received_capital, received_waste
 
-    capital = torch.where(capital < 0.01, cfg.zero_tensor, capital)
+    # capital = torch.where(capital < 0.01, cfg.zero_tensor, capital) # should be non-negative before this, just for cleanup
 
     return capital, waste
 
 
 # def activate_mine_muscle(cfg: EINCASMConfig, mine_activations: torch.Tensor, muscle_radii: torch.Tensor,
-#                          capital: torch.Tensor, waste: torch.Tensor, obstacles: torch.Tensor)
+#                          capital: torch.Tensor, waste: torch.Tensor, obstacles: torch.Tensor) -> torch.Tensor:
+     
           
 
 # def run_physics(cfg: EINCASMConfig, env_channels: torch.Tensor, live_channels: torch.Tensor) -> torch.Tensor:

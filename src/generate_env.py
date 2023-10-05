@@ -79,5 +79,4 @@ def populate_obstacle(channel: np.array, config=None):
     channel = (channel - np.min(channel)) / (np.max(channel) - np.min(channel))
     channel = np.where(channel > full_threshold, 1, channel)
     channel = np.where(channel < empty_threshold, 0, channel)
-    print(f"Channel range: {np.min(channel)} to {np.max(channel)}")
     return channel
