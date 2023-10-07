@@ -14,8 +14,9 @@ importlib.reload(EINCASMConfig)
 #     return muscle_masks
 
 def grow_muscle_csa(cfg: EINCASMConfig, muscle_radii: torch.Tensor, radii_deltas: torch.Tensor,
-                    capital: torch.Tensor, growth_efficiency: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+                    capital: torch.Tensor, growth_cost: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     # TODO: Update to work on batches of environments (simple)
+    # TODO: Cost should be able to be lower than 1, right now it is 1:1 + cost
     """
     Function to simulate the growth of muscle tissue. Modifies the radii and capital tensors in-place.
 
@@ -28,13 +29,7 @@ def grow_muscle_csa(cfg: EINCASMConfig, muscle_radii: torch.Tensor, radii_deltas
     Returns:
     Tuple[torch.Tensor, torch.Tensor]: The new muscle radii and capital tensors.
     """
-    # assert muscle_radii[~muscle_masks].sum() < 1e-6, "Muscle radii in/towards obstacle cells is not zero."
-    # muscle_radii *= muscle_masks
-    # radii_deltas *= muscle_masks
-    # assert capital.min() >= 0, "Capital cannot be negative"
-    # assert capital[~open_cells].sum() < 1e-6, "Capital in obstacle cells is not zero."
-    # capital *= open_cells
-    # assert growth_efficiency.min() >= 0, "Growth efficiency cannot be negative"
+    assert capital.min() >= 0, "Capital cannot be negative (before growth)"
 
     csa_deltas = (muscle_radii + radii_deltas)**2 - muscle_radii**2  # cross-sectional area
 
@@ -43,29 +38,29 @@ def grow_muscle_csa(cfg: EINCASMConfig, muscle_radii: torch.Tensor, radii_deltas
 
     # Atrophy muscle and convert to capital
     new_csa_mags = muscle_radii**2.0
-    # total_capital_before = capital.sum() + new_csa_mags.sum()
+    total_capital_before = capital.sum() + new_csa_mags.sum()
     new_csa_mags.add_(negative_csa_deltas)
 
-    capital.sub_(torch.sum(negative_csa_deltas, dim=0).mul(growth_efficiency))
+    capital.sub_(torch.sum(negative_csa_deltas, dim=0).mul(1-growth_cost)) # gaining capital from atrophy
 
     # Grow muscle from capital, if possible
     total_csa_deltas = torch.sum(positive_csa_deltas, dim=0)
     total_csa_deltas_safe = torch.where(total_csa_deltas == 0, cfg.one_tensor, total_csa_deltas)
     csa_delta_distribution = positive_csa_deltas.div(total_csa_deltas_safe.unsqueeze(0))
-    # del total_csa_deltas_safe # TODO: Free CUDA memory? Garbage Collect?  
+    del total_csa_deltas_safe # TODO: Free CUDA memory? Garbage Collect?  
 
     capital_consumed = torch.where(total_csa_deltas > capital, capital, total_csa_deltas)
     capital.sub_(capital_consumed)
-    capital_consumed.mul_(growth_efficiency)
+    capital_consumed.mul_(1-growth_cost)
     # other than inefficiency, exchange rate between capital and muscle area is 1:1 
     new_csa_mags.addcmul_(capital_consumed.unsqueeze(0), csa_delta_distribution) 
     # This is allowed because even with no available capital a muscle may invert its polarity or go to 0 at only a cost of inefficiency
     torch.copysign(torch.sqrt(new_csa_mags), muscle_radii.add(radii_deltas), out=muscle_radii) 
 
     capital = torch.where(capital < 0.001, cfg.zero_tensor, capital)
-    # assert capital.min() >= 0, "Oops, a cell's capital became negative during growth"
-    # capital_diff = (capital.sum() + new_csa_mags.sum()) - total_capital_before
-    # assert capital_diff <= 0, f"Oops, capital was invented during growth. Diff: {capital_diff}"
+    assert capital.min() >= 0, "Oops, a cell's capital became negative during growth"
+    capital_diff = (capital.sum() + new_csa_mags.sum()) - total_capital_before
+    assert capital_diff <= 0, f"Oops, capital was invented during growth. Diff: {capital_diff}"
 
     return muscle_radii, capital
 
@@ -74,7 +69,26 @@ def activate_muscles(muscle_radii: torch.Tensor, activations: torch.Tensor) -> t
     return (torch.sign(muscle_radii) * (muscle_radii ** 2)).mul(activations)    # Activation is a percentage (kinda) of CSA
 
 
+# TODO: REALLY? NEGATIVE CAPITAL
+def activate_port_muscles(cfg: EINCASMConfig, capital: torch.Tensor, port: torch.Tensor, port_muscle_radii: torch.Tensor,
+                          port_activations: torch.Tensor, port_cost: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    
+    assert capital.min() >= 0, "Capital cannot be negative (before port)"
+    desired_delta = activate_muscles(port_muscle_radii, port_activations)
+    torch.clamp(desired_delta,
+                min=-capital.div(1/port_cost),
+                max=torch.min(capital/port_cost, torch.abs(port)), # Poison costs the same to pump out
+                out=desired_delta)
+    capital -= desired_delta * port_cost
+    capital += torch.copysign(desired_delta,torch.sign(port)) # can produce negative capital
+    torch.clamp(capital, min=0, out=capital)
+    port -= desired_delta
+    del desired_delta
+    assert capital.min() >= 0, "Capital cannot be negative (after port)"
+    return capital, port
+
 def activate_mine_muscles(mine_muscle_radii, mine_activation, capital, obstacle, waste, mining_cost):
+    assert capital.min() >= 0, "Capital cannot be negative (before mine)"
     desired_delta = activate_muscles(mine_muscle_radii, mine_activation)
     torch.clamp(desired_delta,
                 min=torch.max(-waste, -capital/mining_cost),
@@ -83,19 +97,11 @@ def activate_mine_muscles(mine_muscle_radii, mine_activation, capital, obstacle,
     capital -= desired_delta*mining_cost
     obstacle -= desired_delta
     waste += desired_delta
+    torch.clamp(capital, min=0, out=capital)
 
-# TODO: REALLY? NEGATIVE CAPITAL
-def activate_port_muscles(capital: torch.Tensor, port: torch.Tensor, port_muscle_radii: torch.Tensor,
-                          port_activations: torch.Tensor, port_cost: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-    desired_delta = activate_muscles(port_muscle_radii, port_activations)
-    torch.clamp(desired_delta,
-                min=-capital.div(1/port_cost),
-                max=torch.min(capital/port_cost, torch.abs(port)), # Poison costs the same to pump out
-                out=desired_delta)
-    capital -= desired_delta * port_cost
-    capital += torch.copysign(desired_delta,torch.sign(port)) # can produce negative capital
-    port -= desired_delta
-    return capital, port
+    assert capital.min() >= 0, "Capital cannot be negative (after mine)"
+    assert obstacle.min() >= 0, "Obstacle cannot be negative (after mine)"
+    return capital, obstacle, waste
 
 
 def activate_flow_muscles(cfg: EINCASMConfig, capital: torch.Tensor, waste: torch.Tensor, flow_muscle_radii: torch.Tensor,
@@ -115,7 +121,7 @@ def activate_flow_muscles(cfg: EINCASMConfig, capital: torch.Tensor, waste: torc
     torch.Tensor: The updated capital tensor.
     """
     total_capital_before = capital.sum()
-    assert capital.min() >= 0, "Capital cannot be negative"
+    assert capital.min() >= 0, "Capital cannot be negative (before flow)"
 
     cfg.one_tensor = torch.tensor([1.0], device=cfg.device, dtype=cfg.float_dtype)
 
@@ -171,6 +177,10 @@ def activate_flow_muscles(cfg: EINCASMConfig, capital: torch.Tensor, waste: torc
     del received_capital, received_waste
 
     # capital = torch.where(capital < 0.01, cfg.zero_tensor, capital) # should be non-negative before this, just for cleanup
+
+    assert capital.min() >= 0, "Capital cannot be negative (after flow)"
+    capital_diff = capital.sum() - total_capital_before
+    assert capital_diff <= 0, f"Oops, capital was invented during flow. Diff: {capital_diff}"
 
     return capital, waste
 
