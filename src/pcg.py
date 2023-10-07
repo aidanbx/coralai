@@ -19,7 +19,6 @@ def perlin2d(width, height, frequency=10.0, octaves=4, persistence=0.6,
     
     if normalized:
         channel = (channel - channel.min()) / (channel.max() - channel.min())
-
     return channel
 
 def discretize_levy_dust(shape: tuple, dust: np.array) -> np.array:

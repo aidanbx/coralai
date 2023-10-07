@@ -22,10 +22,17 @@ class Resource:
     def __init__(self, id, regen_func, metadata=None, dispersal_func=None):
         self.id = id
         self.regen_func = regen_func
-        self.regen_metadata = metadata
+        default_metadata = {
+            'id': id
+            }
+        if metadata is None:
+            metadata = {}
+        metadata.update(default_metadata)
+        self.metadata = metadata
         self.dispersal_func = dispersal_func
 
-    def update(self, time, resource_map, port):
+    # def update(self, time, resource_map, port):
+    #     port[resource_map == self.id] = port[resource_map == self.id] + self.regen_func(time), self.min, self.max)
 
 def generate_graphics(resources, resource_map, port, min_val, max_val, num_iters=1000):
     # Colors
