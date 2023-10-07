@@ -11,6 +11,7 @@ class Config:
         self.kernel = None
         self.update_float_dtype(config['torch'].get('dtype', 'float32'))
         self.update_device(config['torch']['device']) # Refactor these two?
+        self.VERBOSE = config.get('VERBOSE', False)
         
         self.update_kernel(config.get('kernel', None))
         self.env_config = config.get('environment', None)

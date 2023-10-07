@@ -170,11 +170,11 @@ def simulate_lifecycle(config_file, env_channels, physiology):
 if __name__ == "__main__":
     import visualize    
     importlib.reload(visualize)
-    import generate_env
-    importlib.reload(generate_env)
+    import pcg
+    importlib.reload(pcg)
     # TEST: 0
     # ---------------
-    env_channels = generate_env.generate_env("./config.yaml", visualize=True)
+    env_channels = pcg.generate_env("./config.yaml", visualize=True)
     config = load_check_config("./config.yaml")
     live_channels = init_live_channels(config)
     inoculate_env(config, env_channels, live_channels)

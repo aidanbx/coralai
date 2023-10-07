@@ -1,6 +1,12 @@
+Simulation:
+  world_shape: [20, 20]
+
+
 torch:
-  device: 'mps'
+  device: 'cpu'
   float_dtype: 'float32'
+
+VERBOSE: True
 
 dimensions: 2
 
@@ -13,7 +19,7 @@ kernel: [
   [0, -1]     # LEFT
 ]
 
-world_shape: [50, 50]
+
 
 num_communication_channels: 5
 num_resource_types: 3

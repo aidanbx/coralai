@@ -16,6 +16,7 @@ importlib.reload(EINCASMConfig)
 def grow_muscle_csa(cfg: EINCASMConfig, muscle_radii: torch.Tensor, radii_deltas: torch.Tensor,
                     capital: torch.Tensor, growth_cost: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     # TODO: Update to work on batches of environments (simple)
+    # TODO: Cost should be able to be lower than 1, right now it is 1:1 + cost
     """
     Function to simulate the growth of muscle tissue. Modifies the radii and capital tensors in-place.
 

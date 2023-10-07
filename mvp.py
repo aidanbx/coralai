@@ -5,11 +5,12 @@ from matplotlib import gridspec
 import matplotlib.colors as mcolors
 import torch
 import datetime
+from timeit import default_timer as timer
 import os
 import importlib
 import numpy as np
 import matplotlib.pyplot as plt
-import src.generate_env as gen_env
+import pcg as gen_env
 importlib.reload(gen_env)
 
 import src.physics as physics
@@ -20,9 +21,6 @@ importlib.reload(EINCASMConfig)
 
 import src.Resource as Resource
 importlib.reload(Resource)
-
-cfg = EINCASMConfig.Config('config.yaml')
-cfg.update_device('cpu')
 
 VERBOSE = True
 
@@ -99,7 +97,6 @@ def dig(actuators):
 update_functions = [grow, flow, eat, dig]
 
 
-
 timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M")
 base_folder = "runs/"
 folder = os.path.join(base_folder, timestamp)
@@ -119,7 +116,7 @@ os.mkdir(folder)
 def repopulate_capital(num_sites):
     # Find indices of port channel with highest value
     values, flat_indices = port.view(-1).topk(num_sites)
-    indices = np.column_stack(np.unravel_index(flat_indices.numpy(), port.shape))
+    indices = np.column_stack(np.unravel_index(flat_indices.to("cpu").numpy(), port.shape))
 
     capital[indices[:,0], indices[:,1]] = 1000
 
@@ -165,10 +162,12 @@ def update(period):
         torch.save(dic, save_path)
         
 periods = np.linspace(0,np.pi*2,100)
+start = timer()
 for period in periods:
     update(period)
+end = timer()
 
-print("Done")
+print(f"{cfg.device}: Simulated {len(periods)} periods of {cfg.world_shape} in {end-start} seconds")
 
 def animate():
     # Colors
@@ -243,109 +242,5 @@ def animate():
     plt.tight_layout()
     plt.show()
 
-animate()
-
-
-def quiv_vis():
-    # base_folder = "runs/"
-    # stamp = "20231005-0516"
-    # folder = os.path.join(base_folder, stamp)
-    # data = []
-    # for i in range(100):
-    #     path = os.path.join(folder, f"{i}.pt")
-    #     if os.path.exists(path):
-    #         data.append(torch.load(path))
-    """
-    muscle_radii torch.Size([7, 10, 10])
-    capital torch.Size([10, 10])
-    waste torch.Size([10, 10])
-    port torch.Size([10, 10])
-    resource_map torch.Size([10, 10])
-    obstacles torch.Size([10, 10])
-    actuators torch.Size([13, 10, 10])
-    """
-
-    """
-    state_tensor[0] = np.random.uniform(low=-1, high=1, size=(10, 10)) # activations
-
-    state_tensor[1] += np.random.uniform(low=0, high=1, size=(10, 10)) # cytoplasm
-    state_tensor[1] = state_tensor[1] / np.linalg.norm(state_tensor[1])
-
-    state_tensor[2:7] += np.random.uniform(low=-1, high=1, size=(5, 10, 10)) # muscle radii
-    state_tensor[2:7] = state_tensor[2:7] / np.linalg.norm(state_tensor[2:7])
-    """
-
-    tensors = []
-    for d in data:
-        state_tensor = np.empty((7, cfg.world_shape[0], cfg.world_shape[1]))
-        state_tensor[0] = d["actuators"][actuator_indecies["flow_act"]]
-        state_tensor[1] = d["capital"]
-        state_tensor[2:7] = d["muscle_radii"][1:6]
-        tensors.append(state_tensor)
-
-    # Make the UV quiver thing a function so it can be any 3x3 kernel
-    # Muscle value can be > 1
-    # Why are some long arrows black? Should be colored?
-
-    # Load the 100 tensors from the directory
-
-    WIDTH = len(tensors[0][0][0])
-    HEIGHT = len(tensors[0][0])
-
-    plots = []
-
-    fig, ax = plt.subplots()
-
-    def update_plot(frame):
-        def muscle_activations(muscle_radii, activations):
-            return muscle_radii * activations
-        
-        def get_muscle_color(value):
-            if value > 0:
-                green = value * 255
-                red = 0
-            else:
-                green = 0
-                red = -value * 255
-            return (red, green, 0)  # Return RGB tuple
-        
-        ax.clear()
-
-        X, Y = np.meshgrid(range(0,WIDTH), range(0,HEIGHT))
-        quiver_scale = WIDTH * .005
-        
-        # Quiver Plots (Muscle Radii * Activation)
-        UP = muscle_activations(tensors[frame][3], tensors[frame][0])
-        U = np.zeros_like(UP)
-        V = np.abs(UP)
-        ax.quiver(X, Y, U, V, color=[get_muscle_color(value) for value in UP.flatten()], angles='xy', scale_units='xy', scale=quiver_scale)
-
-        RIGHT = muscle_activations(tensors[frame][4], tensors[frame][0])
-        U = np.abs(RIGHT)
-        V = np.zeros_like(RIGHT)
-        ax.quiver(X, Y, U, V, color=[get_muscle_color(value) for value in RIGHT.flatten()], angles='xy', scale_units='xy', scale=quiver_scale)
-
-        DOWN = muscle_activations(tensors[frame][5], tensors[frame][0])
-        U = np.zeros_like(DOWN)
-        V = -np.abs(DOWN)
-        ax.quiver(X, Y, U, V, color=[get_muscle_color(value) for value in DOWN.flatten()], angles='xy', scale_units='xy', scale=quiver_scale)
-
-        LEFT = muscle_activations(tensors[frame][6], tensors[frame][0])
-        U = -np.abs(LEFT)
-        V = np.zeros_like(LEFT)
-        ax.quiver(X, Y, U, V, color=[get_muscle_color(value) for value in LEFT.flatten()], angles='xy', scale_units='xy', scale=quiver_scale)
-
-        # Scatter Plot (Cytoplasm)
-        cytoplasm = tensors[frame][1]
-        ax.scatter(X, Y, color=(.18, .97, 1), alpha=.3, s=[value*5000 for value in cytoplasm.flatten()])
-
-        ax.set_xlim(-1, WIDTH)
-        ax.set_ylim(-1, HEIGHT)    
-
-
-        ani = animation.FuncAnimation(fig=fig, func=update_plot, frames=40, interval=100)
-        f = r"./limited_eincasm_20.gif" 
-        writergif = animation.PillowWriter(fps=20) 
-        ani.save(f, writer=writergif)
-
-quiv_vis()
+if VERBOSE:
+    animate()
