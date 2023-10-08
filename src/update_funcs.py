@@ -6,10 +6,7 @@ importlib.reload(Simulation)
 import src.Channel as Channel
 importlib.reload(Channel)
 
-def step_period(sim: Simulation.Simulation):
-    sim.metadata["period"] += 1
-
-def regen_ports(sim: Simulation, ports: Channel, obstacles: Channel):
+def regen_ports(sim: Simulation, ports: Channel):
     # TODO: take into account resource size and obstacles?
     period = sim.metadata["period"]
     port_id_map = ports.metadata["port_id_map"]

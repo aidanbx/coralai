@@ -1,6 +1,4 @@
 import importlib
-import src.Simulation as Simulation
-importlib.reload(Simulation)
 import src.Channel as Channel
 importlib.reload(Channel)
 import src.utils as utils
@@ -29,7 +27,7 @@ class UpdateFunction:
             metadata = {}
         metadata.update(default_metadata)
 
-    def assert_compatability(self, sim: Simulation.Simulation):
+    def assert_compatability(self, sim):
         for id in self.input_channel_ids:
             assert id in sim.channels.keys(), f"Input channel \"{id}\" for update func \"{self.id}\" not in simulation \"{sim.id}\""
         for id in self.affected_channel_ids:
@@ -41,7 +39,7 @@ class UpdateFunction:
             all_channel_metadata[channel_id] = channel.metadata
         utils.check_subdict(all_channel_metadata, self.req_channel_metadata)
 
-    def update(self, sim: Simulation.Simulation):
+    def update(self, sim):
         # assert self.contents is not None, f"Channel \"{self.id}\" has not been initialized"
         output = self.func(sim, *[sim.channels[id] for id in self.input_channel_ids])
         

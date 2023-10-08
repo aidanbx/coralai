@@ -34,9 +34,9 @@ class Channel:
     
     def init_contents(self):
         contents, init_metadata = self.init_function(self.shape, self.metadata)
-        assert contents.shape == self.shape, f"init_function {id} must return tensor of shape {self.shape}"
-        assert contents.min() >= self.allowed_range[0], f"init_function for {id} must return tensor with min value >= {self.allowed_range[0]}"
-        assert contents.max() <= self.allowed_range[1], f"init_function for {id} must return tensor with max value <= {self.allowed_range[1]}"
+        assert contents.shape == self.shape, f"init_function {self.id} must return tensor of shape {self.shape}"
+        assert contents.min() >= self.allowed_range[0], f"init_function for {self.id} must return tensor with min value >= {self.allowed_range[0]}"
+        assert contents.max() <= self.allowed_range[1], f"init_function for {self.id} must return tensor with max value <= {self.allowed_range[1]}"
         
         self.metadata.update(init_metadata)
         self.contents = contents
