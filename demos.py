@@ -3,22 +3,12 @@ from matplotlib.animation import FuncAnimation
 import matplotlib.colors as mcolors
 import torch
 import numpy as np
-
-import importlib
-import src.Resource as Resource
-importlib.reload(Resource)
-import src.pcg as pcg
-importlib.reload(pcg)
-import src.Simulation as Simulation
-importlib.reload(Simulation)
-import src.channel_funcs as channel_funcs
-importlib.reload(channel_funcs)
-import src.update_funcs as update_funcs
-importlib.reload(update_funcs)
+from src import pcg, physics
+from src.Simulation import Simulation
 
 def resource_weather_demo():
-    sim = Simulation.Simulation("Resource Weather Demo")
-    sim.add_channel("ports", init_func=channel_funcs.init_resources_levy, allowed_range=[-1,10],
+    sim = Simulation("Resource Weather Demo")
+    sim.add_channel("ports", init_func=pcg.init_ports_levy, allowed_range=[-1,10],
                     metadata={'description': 'Currently +/- resources generated with levy dust',
                             'num_resources': 3,
                             'min_regen_amp': 0.5,
@@ -35,7 +25,7 @@ def resource_weather_demo():
                             req_sim_metadata = {"period": float})
 
     sim.add_update_function("regen_resources",
-                                update_funcs.regen_ports,
+                                physics.regen_ports,
                                 input_channel_ids=["ports"], affected_channel_ids=["ports"],
                                 metadata={'description': 'Regenerate resources'},
                                 req_channel_metadata = {"ports": ["port_id_map", "port_sizes", "resources"]},
@@ -44,10 +34,9 @@ def resource_weather_demo():
     sim.init_all_channels()
     resources = sim.channels["ports"].metadata["resources"]
     port_id_map = sim.channels["ports"].metadata["port_id_map"]
-    ports = sim.channels["ports"].contents
+    ports = sim.channels["ports"].contents.squeeze(0)
     allowed_range = sim.channels["ports"].allowed_range
-    period = sim.metadata["period"]
-    # periods = torch.linspace(0, np.pi*8, 1000)
+    # periods = torch.linspace(0, np.pi*8, 1s000)
 
     fig = plt.figure(figsize=(12, 8))
     gs = gridspec.GridSpec(2, 2, height_ratios=[1, 0.25])
