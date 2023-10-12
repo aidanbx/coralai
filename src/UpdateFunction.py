@@ -23,6 +23,7 @@ class UpdateFunction:
         if metadata is None:
             metadata = {}
         metadata.update(default_metadata)
+        self.metadata = metadata
 
     def assert_compatability(self, sim):
         for id in self.input_channel_ids:
@@ -36,20 +37,15 @@ class UpdateFunction:
             all_channel_metadata[channel_id] = channel.metadata
         utils.check_subdict(all_channel_metadata, self.req_channel_metadata)
 
+
     def update(self, sim):
-        # assert self.contents is not None, f"Channel \"{self.id}\" has not been initialized"
-        output = self.func(sim, *[sim.channels[id] for id in self.input_channel_ids])
-        
-        desired_output_size = len(self.affected_channel_ids)
-        output_size = 0
-        output_size = 1 if isinstance(output, Channel) else output_size
-        output_size = len(output) if isinstance(output, list) else output_size 
-        assert output_size == desired_output_size, (f"Update function \"{self.id}\" must return {desired_output_size}" +
-                                                    f"Channel(s) in order: {self.affected_channel_ids}, got {output_size}" +
-                                                    f"Channel(s): {output} instead")
-        
-
-
+        try:
+            self.func(sim, *[sim.channels[id] for id in self.input_channel_ids], self.metadata)
+        except Exception as e:
+            raise RuntimeError(f"UpdateFunction \"{self.id}\": Error in function execution: {str(e)}")
+        for ch in self.affected_channel_ids:
+            if ch.shape != ch.contents.shape:
+                raise RuntimeError(f"UpdateFunction \"{self.id}\": Affected Channel \"{ch.id}\" has shape {ch.shape}, but updated contents have shape {ch.contents.shape}")
 
 # class Agent:
 #     def __init__(self, config_file):

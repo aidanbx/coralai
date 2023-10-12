@@ -5,6 +5,7 @@ import torch
 import numpy as np
 from src import pcg, physics
 from src.Simulation import Simulation
+from src.EINCASM import EINCASM
 
 def resource_weather_demo():
     sim = Simulation("Resource Weather Demo")
@@ -80,6 +81,6 @@ def resource_weather_demo():
     plt.show()
 
 if __name__ == "__main__":
-    resource_weather_demo()
-
-    
+    # resource_weather_demo()
+    tst = EINCASM()
+    tst.run()

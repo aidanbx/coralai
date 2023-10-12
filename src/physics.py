@@ -2,9 +2,9 @@ import torch
 from typing import Tuple
 from src import Simulation, Channel
 
-def random_agent(sim: Simulation, capital: Channel, muscles: Channel, communication: Channel):
-    actuators = torch.rand(total_actuator_channels)*2-1
-    return actuators
+def random_agent(sim: Simulation, capital: Channel, muscles: Channel, communication: Channel, metadata: dict):
+    for aff_id in metadata["affected_channel_ids"]:
+        sim.channels[aff_id].contents = torch.rand(sim.channels[aff_id].shape)*2-1
 
 def regen_ports(sim: Simulation, ports: Channel):
     # TODO: take into account resource size and obstacles?
@@ -19,18 +19,22 @@ def regen_ports(sim: Simulation, ports: Channel):
                     out=ports.contents.squeeze(0)[port_id_map == resource.id])
     num_regens = ports.metadata.get("num_regens", 0)
     ports.metadata.update({"num_regens": num_regens + 1})
-    return ports
 
 def grow_muscle_csa(
-        sim: Simulation, muscle_radii_ch: Channel, radii_deltas_ch: Channel,
-        capital_ch: Channel, metadata: dict):
+        sim: Simulation, capital_ch: Channel, muscle_radii_ch: Channel, radii_deltas_ch: Channel,
+        metadata: dict):
     
     # TODO: Update to work on batches of environments (simple)
     # TODO: Cost should be able to be lower than 1, right now it is 1:1 + cost
     growth_cost = metadata["growth_cost"]
     muscle_radii = muscle_radii_ch.contents
     radii_deltas = radii_deltas_ch.contents
+    capital_ch.contents = capital_ch.contents.squeeze(0)
     capital = capital_ch.contents
+    # print all shapes
+    print(f'muscle_radii shape: {muscle_radii.shape}')
+    print(f'radii_deltas shape: {radii_deltas.shape}')
+    print(f'capital shape: {capital.shape}')
 
     assert capital.min() >= 0, "Capital cannot be negative (before growth)"
 
@@ -65,7 +69,7 @@ def grow_muscle_csa(
     capital_diff = (capital.sum() + new_csa_mags.sum()) - total_capital_before
     assert capital_diff <= 0, f"Oops, capital was invented during growth. Diff: {capital_diff}"
 
-    return muscle_radii, capital
+    capital_ch.contents = capital.unsqueeze(0)
 
 
 def activate_muscles(muscle_radii: torch.Tensor, activations: torch.Tensor):
@@ -82,6 +86,7 @@ def activate_port_muscles(
     port_muscle_radii = port_muscle_radii_ch.contents
     port_activations = port_activations_ch.contents
     
+    
     assert capital.min() >= 0, "Capital cannot be negative (before port)"
     desired_delta = activate_muscles(port_muscle_radii, port_activations)
     torch.clamp(desired_delta,
@@ -94,7 +99,7 @@ def activate_port_muscles(
     ports -= desired_delta
     del desired_delta
     assert capital.min() >= 0, "Capital cannot be negative (after port)"
-    return capital, ports
+
 
 def activate_mine_muscles(
         capital_ch: Channel, obstacles_ch: Channel, waste_ch: Channel,
@@ -120,8 +125,6 @@ def activate_mine_muscles(
 
     assert capital.min() >= 0, "Capital cannot be negative (after mine)"
     assert obstacles.min() >= 0, "Obstacle cannot be negative (after mine)"
-    return capital, obstacles, waste
-
 
 def activate_flow_muscles(
         capital_ch: Channel, waste_ch: Channel, obstacles_ch: Channel,
@@ -194,5 +197,3 @@ def activate_flow_muscles(
     assert capital.min() >= 0, "Capital cannot be negative (after flow)"
     capital_diff = capital.sum() - total_capital_before
     assert capital_diff <= 0, f"Oops, capital was invented during flow. Diff: {capital_diff}"
-
-    return capital, waste

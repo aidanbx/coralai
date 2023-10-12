@@ -63,6 +63,7 @@ def init_muscle_radii(shape: tuple, metadata: dict):
 
 
 def init_obstacles_perlin(shape: tuple, metadata: dict):
+    shape = shape[1:]
     # TODO: update to batches? 
     empty_threshold = metadata.get("empty_thresh", 0.4)
     full_threshold = metadata.get("full_thresh", 0.6)
@@ -79,7 +80,7 @@ def init_obstacles_perlin(shape: tuple, metadata: dict):
     torch.where(obstacles > full_threshold, torch.tensor(1), obstacles, out=obstacles)
     torch.where(obstacles < empty_threshold,torch.tensor(0), obstacles, out=obstacles)
 
-    return obstacles, {"empty_threshold": empty_threshold,
+    return obstacles.unsqueeze(0), {"empty_threshold": empty_threshold,
                         "full_threshold": full_threshold,
                         "frequency": frequency,
                         "octaves": octaves,
