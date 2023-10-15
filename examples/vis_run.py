@@ -6,7 +6,7 @@ import torch
 import importlib
 import src.EINCASMConfig as EINCASMConfig
 importlib.reload(EINCASMConfig)
-cfg = EINCASMConfig.Config('config.yaml')
+cfg = EINCASMConfig.EINCASMConfig('config.yaml')
 
 base_folder = "runs/"
 stamp = "20231005-0516"

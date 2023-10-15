@@ -1,3 +1,6 @@
+import json
+
+
 def check_subdict(check_dict, req_dict):
     if isinstance(req_dict, dict):
         for k, v in req_dict.items():
@@ -36,3 +39,7 @@ def test_check_subdict():
     assert check_subdict(sim_metadata, req_sim_metadata1)  # True
     assert check_subdict(sim_metadata, req_sim_metadata2)  # True
     assert not check_subdict(sim_metadata, req_sim_metadata3)  # False
+
+
+def dict_to_str(metadata):
+    return json.dumps(metadata, default=lambda o: repr(o), indent=2).replace("\\n", "\n").replace("\\t", "\t").replace('\\"', '\"')

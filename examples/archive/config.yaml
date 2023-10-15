@@ -1,7 +1,6 @@
 Simulation:
   world_shape: [20, 20]
 
-
 torch:
   device: 'cpu'
   float_dtype: 'float32'
@@ -18,8 +17,6 @@ kernel: [
   [1, 0],     # DOWN
   [0, -1]     # LEFT
 ]
-
-
 
 num_communication_channels: 5
 num_resource_types: 3
