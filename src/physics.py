@@ -31,10 +31,6 @@ def grow_muscle_csa(
     radii_deltas = radii_deltas_ch.contents
     capital_ch.contents = capital_ch.contents.squeeze(0)
     capital = capital_ch.contents
-    # print all shapes
-    print(f'muscle_radii shape: {muscle_radii.shape}')
-    print(f'radii_deltas shape: {radii_deltas.shape}')
-    print(f'capital shape: {capital.shape}')
 
     assert capital.min() >= 0, "Capital cannot be negative (before growth)"
 

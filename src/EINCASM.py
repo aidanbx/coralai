@@ -25,8 +25,8 @@ PORTS = 'ports'
 num_communication_channels = 2
 
 class EINCASM:
-    def __init__(self):
-        self.sim = Simulation.Simulation('EINCASM Experiment')
+    def __init__(self, world_shape: tuple = (100, 100), verbose: bool = False):
+        self.sim = Simulation.Simulation('EINCASM Experiment', world_shape, verbose=verbose)
         device = 'mps'
         if device == 'mps':
             if torch.backends.mps.is_available():

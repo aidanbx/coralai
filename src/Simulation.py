@@ -2,9 +2,12 @@ import torch
 import numpy as np
 from src.UpdateFunction import UpdateFunction
 from src.Channel import Channel
+import src.utils as utils
 
 class Simulation:
-    def __init__(self, id: str = "default", world_shape: tuple = (100, 100), metadata: dict = None, device: torch.device = torch.device("cpu")):
+    def __init__(self, id: str = "default", world_shape: tuple = (100, 100),
+                 metadata: dict = {}, device: torch.device = torch.device("cpu"),
+                 verbose: bool = False):
         self.id = id
         self.world_shape = world_shape
         self.world_layers = 0
@@ -12,12 +15,14 @@ class Simulation:
         self.update_functions = {}
         self._deferred_groups = {}
         self.device = device
+        self.verbose = verbose
 
-        default_metadata = {
-            'id': id,
-            'world_shape': world_shape,
+        self.metadata = {
+            'id': self.id,
+            'world_shape': self.world_shape,
         }
-        self.metadata = {**metadata, **default_metadata} if metadata else default_metadata
+        self.metadata.update(metadata)
+    
 
     def add_channel(self, id: str, init_func: callable = None, num_layers: int = 1, metadata: dict={},
                     allowed_range: tuple = None):
@@ -25,7 +30,7 @@ class Simulation:
             raise ValueError(f"Channel with ID {id} already exists.")
         self.world_layers += num_layers
         shape = (num_layers, *self.world_shape)
-        self.channels[id] = Channel(id, shape, init_func, metadata, allowed_range)
+        self.channels[id] = Channel(id, shape, init_func, metadata, allowed_range, verbose=self.verbose)
     
     def add_subchannel(self, id: str, parent_id: str, indices: list[int], metadata: dict={}):
         if id in self.channels:
@@ -45,7 +50,7 @@ class Simulation:
         metadata['is_subchannel'] = True
         shape = (len(indices), *self.world_shape)
         init_func = lambda shp, md: (md['parent_channel'].contents[indices], md)
-        self.channels[id] = Channel(id, shape, init_func, metadata, parent_channel.allowed_range)
+        self.channels[id] = Channel(id, shape, init_func, metadata, parent_channel.allowed_range, verbose=self.verbose)
 
     # TODO: add channels not of world shape and add associations to other world/other channels (for hierarchical channels)
     # EG: define a set of NN channels (and their genomes) that are associated with a world channel via a genome map
@@ -56,7 +61,7 @@ class Simulation:
         if id in self.update_functions:
             raise ValueError(f"Update function with ID {id} already exists.")
         update_func = UpdateFunction(id, function, input_channel_ids, affected_channel_ids,
-                                     metadata, req_sim_metadata, req_channel_metadata)
+                                     metadata, req_sim_metadata, req_channel_metadata, verbose=self.verbose)
         update_func.assert_compatability(sim=self)
         self.update_functions[id] = update_func
 
@@ -68,68 +73,30 @@ class Simulation:
                         channel.metadata['parent_channel'].init_contents()
                     channel.init_contents()
             except Exception as e:
-                raise RuntimeError(f"An error occurred while initializing channel {channel.id}") from e
+                if self.verbose:
+                    channel_info = repr(self.channels[channel.id])
+                else:
+                    channel_info = str(self.channels[channel.id])
+                raise RuntimeError(f"An error occurred while initializing channel {channel.id}" +
+                                   channel_info +
+                                   f"\nError:\n{e}") from e
 
     def update(self):
         for _, update_function in self.update_functions.items():
             update_function.update(sim=self)
 
-    # def update_group(self, old_group_id, new_group_id):
+    def __repr__(self):
+        channel_str = "-------------------------------------------------------------------------------\n"
+        for channel in self.channels.values():
+            channel_str += f"\n---\n{channel.id}\n\n{repr(channel)}\n---\n"
 
-    # def define_channel_group(self, group_id, channel_ids: np.array, group_metadata, dtype=torch.float32, device=torch.device("cpu")):
-    #     if group_id in self.channels:
-    #         raise ValueError(f"Channel with ID {group_id} already exists.")
-
-    #     flat_chids = set(channel_ids)
-    #     subgroups = []
-    #     chs_in_groups = set()
-    #     for ch_id in channel_ids:
-    #         if ch_id not in self.channels:
-    #             raise ValueError(f"Channel with ID {ch_id} does not exist.")
-    #         channel = self.channels[ch_id]
-    #         if channel.metadata['is_group']:
-    #             subgroups.append(ch_id)
-    #             for ch_ 
-    #             [flat_chids.add(grouped_ch_id) for grouped_ch_id in channel.metadata['channel_ids']]
-
-    #     num_layers = sum([self.channels[ch_id].num_layers for ch_id in flat_chids])
-
-    #     # Add group metadata
-    #     additional_metadata = {
-    #         'is_group': True,
-    #         'num_layers': num_layers,     # for convenience
-    #         'channel_ids': channel_ids,
-    #         'flat_chids': flat_chids,
-    #         'subgroup_ids': subgroups,
-    #     }
-    #     final_metadata = {**group_metadata, **additional_metadata}
-
-    #     # Add the group tensor as a new Channel with appropriate metadata
-    #     def init_group(shape, metadata):
-
-    #         tensors = []
-    #         for ch_id in metadata['flat_chids']:
-    #             channel = self.channels[ch_id]
-    #             if not channel.initialized:
-    #                 channel.init_contents()
-    #             tensors.append(channel.contents)
-            
-    #         group_tensor = torch.cat(tensors, dim=0)
-
-    #         # redefine the base tensors in terms of this highest level (as of now) group
-    #         start_index = 0
-    #         for ch_id in metadata['flat_chids']:
-    #             channel = self.channels[ch_id]
-    #             del channel.contents
-    #             num_layers = channel.num_layers
-    #             channel.contents = group_tensor[start_index:start_index+num_layers].view(channel.num_layers, *self.world_shape)
-
-    #         for gr_id in metadata['subgroups']:
-    #             group_ch = self.channels[gr_id]
-    #             del group_ch.contents
-    #             group_ch.
-
-    #         return group_tensor, {}
-                
-
-    #     self.add_channel(group_id, init_group, group_shape[0], metadata=final_metadata, dtype=dtype, device=device)
+        update_func_str = "-------------------------------------------------------------------------------\n"
+        for update_func in self.update_functions.values():
+            update_func_str += f"\n---\n{update_func.id}\n\n{repr(update_func)}\n---\n"
+        
+        return (
+            f"Simulation(\nid: {self.id}\n"
+            f"Metadata:\n{utils.dict_to_str(self.metadata)}\n"
+            f"---\nChannels:\n{channel_str}\n"
+            f"---\nUpdate Functions:\n{update_func_str}\n"
+        )

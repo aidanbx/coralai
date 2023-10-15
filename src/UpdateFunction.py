@@ -1,17 +1,21 @@
 from src import utils
-from src.Channel import Channel
+# from src.Channel import Channel
+import json
+from pprint import pformat
+import src.utils as utils
 
 class UpdateFunction:
     def __init__(self, id: str, func: callable,
                  input_channel_ids: list[str] = [], affected_channel_ids: list[str] = [],
                  metadata: dict = None, req_sim_metadata: dict = {},
-                 req_channel_metadata: dict = {}):
+                 req_channel_metadata: dict = {}, verbose: bool = False):
         self.id = id
         self.func = func
         self.input_channel_ids = input_channel_ids
         self.affected_channel_ids = affected_channel_ids
         self.req_sim_metadata = req_sim_metadata
         self.req_channel_metadata = req_channel_metadata
+        self.verbose = verbose
         
         default_metadata = {
             'id': id,
@@ -39,13 +43,43 @@ class UpdateFunction:
 
 
     def update(self, sim):
+        if self.verbose:
+            print(f"UpdateFunction \"{self.id}\" updating...")
         try:
             self.func(sim, *[sim.channels[id] for id in self.input_channel_ids], self.metadata)
         except Exception as e:
-            raise RuntimeError(f"UpdateFunction \"{self.id}\": Error in function execution: {str(e)}")
+            if self.verbose:
+                extra_info = f"\nSim Metadata:\n{utils.dict_to_str(sim.metadata)}\n"
+                extra_info += f"\n{self.__repr__()}"
+            else:
+                extra_info = ""
+            raise RuntimeError(f"Error in UpdateFunction: \"{self.id}\"" +
+                               extra_info +
+                               f"\nOriginal Error:\n{e}") from e
+        
         for ch in self.affected_channel_ids:
             if ch.shape != ch.contents.shape:
                 raise RuntimeError(f"UpdateFunction \"{self.id}\": Affected Channel \"{ch.id}\" has shape {ch.shape}, but updated contents have shape {ch.contents.shape}")
+
+    def __str__(self) -> str:
+        return f"UpdateFunction(id={self.id}, input_channel_ids={self.input_channel_ids}, affected_channel_ids={self.affected_channel_ids})"
+    
+    def __repr__(self) -> str:
+        metadata_str = utils.dict_to_str(self.metadata)
+        input_channel_ids_str = pformat(self.input_channel_ids, width=50, compact=True)
+        affected_channel_ids_str = pformat(self.affected_channel_ids, width=50, compact=True)
+        req_sim_metadata_str = utils.dict_to_str(self.req_sim_metadata)
+        req_channel_metadata_str = utils.dict_to_str(self.req_channel_metadata)
+        return (
+            f"UpdateFunction(\n"
+            f"\tid={self.id},\n"
+            f"\tinput_channel_ids={input_channel_ids_str},\n"
+            f"\taffected_channel_ids={affected_channel_ids_str},\n"
+            f"\treq_sim_metadata={req_sim_metadata_str},\n"
+            f"\treq_channel_metadata={req_channel_metadata_str},\n"
+            f"\tmetadata={metadata_str}\n"
+            f")"
+        )
 
 # class Agent:
 #     def __init__(self, config_file):

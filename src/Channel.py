@@ -1,12 +1,16 @@
 import numpy as np
 import torch
+import json
+from pprint import pformat
 
 class Channel:
     def __init__(self, id, shape, init_func=None, metadata: dict=None,
-                 allowed_range=(-np.inf, np.inf), dtype=torch.float32, device=torch.device("cpu")):
+                 allowed_range=(-np.inf, np.inf), dtype=torch.float32,
+                 device=torch.device("cpu"), verbose: bool = False):
         
         self.id = id
         self.shape = shape
+        self.verbose = verbose
         
         if init_func is None:
             init_func = lambda shape, md: (torch.zeros(shape, dtype=dtype, device=device), md)
@@ -26,6 +30,7 @@ class Channel:
         self.dtype = dtype
         self.device = device
         self.initialized = False
+        self.contents=torch.Tensor()    
     
     def init_contents(self):
         contents, init_metadata = self.init_function(self.shape, self.metadata)
@@ -37,3 +42,30 @@ class Channel:
         self.contents = contents
         self.initialized=True
         return self.contents
+
+
+    def __str__(self):
+        return f"Channel(id={self.id}, shape={self.shape}, dtype={self.dtype}, device={self.device}, initialized={self.initialized})"
+    
+    def __repr__(self):
+        contents_str = pformat(self.contents.tolist(), width=50, compact=True)
+        if self.metadata.get('is_subchannel', False):
+            new_metadata = self.metadata.copy()
+            new_metadata["parent_channel"] = new_metadata["parent_channel"].id
+            obj_title = "subChannel"
+        else:
+            new_metadata = self.metadata
+            obj_title = "Channel"
+
+        metadata_str = json.dumps(new_metadata, default=lambda o: repr(o), indent=2).replace("\\n", "\n")
+        return (
+            f"{obj_title}(\n"
+            f"\tid={self.id},\n"
+            f"\tshape={self.shape},\n"
+            f"\tdtype={self.dtype},\n"
+            f"\tdevice={self.device},\n"
+            f"\tinitialized={self.initialized},\n"
+            f"\tcontents=\n{contents_str},\n"
+            f"\tmetadata={metadata_str}\n"
+            f")"
+        )
