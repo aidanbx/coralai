@@ -1,6 +1,5 @@
 import json
 
-
 def check_subdict(check_dict, req_dict):
     if isinstance(req_dict, dict):
         for k, v in req_dict.items():

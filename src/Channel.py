@@ -11,6 +11,8 @@ class Channel:
         self.id = id
         self.shape = shape
         self.verbose = verbose
+        self.subchannels = []
+        self.parent_channel = None
         
         if init_func is None:
             init_func = lambda shape, md: (torch.zeros(shape, dtype=dtype, device=device), md)
@@ -42,7 +44,19 @@ class Channel:
         self.contents = contents
         self.initialized=True
         return self.contents
+    
+    # def add_subchannel(self, id, slice):
+    #     subchannel = Channel(id, )
 
+    # def add_subchannel(self, channel):
+    #     self.subchannels.append(channel)
+    
+    # def update_sub_channels(self, new_content=None):
+    #     if new_content is None:
+    #         new_content = self.contents
+    #     for subchannel in self.subchannels:
+    #         subchannel.contents = new_content[subchannel.metadata['parent_indices']]
+    #         subchannel.initialized = True
 
     def __str__(self):
         return f"Channel(id={self.id}, shape={self.shape}, dtype={self.dtype}, device={self.device}, initialized={self.initialized})"
