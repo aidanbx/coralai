@@ -63,6 +63,7 @@ def init_muscle_radii(shape: tuple, metadata: dict):
 
 
 def init_obstacles_perlin(shape: tuple, metadata: dict):
+    # TODO: convert to taichi
     shape = shape[1:]
     # TODO: update to batches? 
     empty_threshold = metadata.get("empty_thresh", 0.4)

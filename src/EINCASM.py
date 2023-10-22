@@ -69,8 +69,8 @@ class EINCASM:
         self.sim.add_subchannel(MINE_M, MUSCLES, indices = [self.kernel.shape[0]+1])
         self.sim.add_channel(ALL_MUSCLE_ACT, num_layers=3, allowed_range=[-1, 1])
         self.sim.add_subchannel(FLOW_MACT, ALL_MUSCLE_ACT, indices = 0)
-        self.sim.add_subchannel( PORT_MACT, ALL_MUSCLE_ACT, indices = 1)
-        self.sim.add_subchannel( MINE_MACT, ALL_MUSCLE_ACT, indices = 2)
+        self.sim.add_subchannel(PORT_MACT, ALL_MUSCLE_ACT, indices = 1)
+        self.sim.add_subchannel(MINE_MACT, ALL_MUSCLE_ACT, indices = 2)
         # flow, port, and mine muscles treated equally during growth
         self.sim.add_channel(GROWTH_ACT, num_layers = self.kernel.shape[0] + 2)
         self.sim.add_channel(CAPITAL, allowed_range = [0, 100])

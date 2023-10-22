@@ -1,12 +1,17 @@
 import torch
 import torch.nn as nn
 import taichi as ti
+from timeit import Timer
+
+VISUALIZE = True
 
 # arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=ti.metal)
-img_w, img_h = 512, 256
-cell_size = 1
-w, h = img_w // cell_size, img_h // cell_size
+w, h = 100, 100
+n_ch = 12
+n_im = n_ch//3  # 3 channels per image, 3 images next to each other widthwise
+cell_size = 4
+img_w, img_h = w * cell_size * n_im, h * cell_size
 render_buffer = ti.Vector.field(
             n=3,
             dtype=ti.f32,
@@ -14,12 +19,13 @@ render_buffer = ti.Vector.field(
         )
 
 @ti.kernel
-def write_to_renderer(
-        state: ti.types.ndarray(dtype=ti.f32),
-    ):
-    for i, j in ti.ndrange(img_w, img_h):
-        for p in ti.static(range(3)):
-            render_buffer[i, j][p] = state[0, p, h - j//cell_size, i//cell_size]
+def write_to_renderer(state: ti.types.ndarray(dtype=ti.f32)):
+    for i, j in render_buffer:
+        offset = int(n_im * i/img_w) * 3
+        xind = (i//cell_size) % w
+        yind = (j//cell_size) % h
+        for ch in ti.static(range(3)):
+            render_buffer[i, j][ch] = state[0, offset+ch, xind, yind]
 
 @ti.kernel
 def add_noise(strength: ti.f32, state: ti.types.ndarray()):
@@ -28,19 +34,23 @@ def add_noise(strength: ti.f32, state: ti.types.ndarray()):
             state[0, ch, i, j] += ti.random(float) * strength
 
 @ti.kernel
-def set_neigh_zero(
-        ind_x: ti.i32,
-        ind_y: ti.i32,
+def draw_rad_zero(
+        pos_x: ti.f32,
+        pos_y: ti.f32,
         radius: ti.i32,
         state: ti.types.ndarray()
     ):
-    for i, j in ti.ndrange((ind_x-radius, ind_x+radius), (ind_y-radius, ind_y+radius)):
+    ind_x = int(pos_x * w)
+    ind_y = int(pos_y * h)
+    offset = int(pos_x * n_im) * 3
+    for i, j in ti.ndrange((-radius, radius), (-radius, radius)):
         for ch in ti.static(range(3)):
-            if (i-ind_x)**2 + 2*(j-ind_y)**2 < radius**2:
-                state[0, ch, i, j] *= 0.001
+            if (i**2) + j**2 < radius**2:
+                state[0, offset+ch, (i + ind_x * n_im) % w, (j + ind_y) % h] *= 0.001
+
 
 class NCA(nn.Module):
-    def __init__(self, channel_count):
+    def __init__(self, channel_count, visualize = True):
         super(NCA, self).__init__()
         self.state = torch.rand(1, channel_count, w, h)
         self.conv = nn.Conv2d(
@@ -52,44 +62,45 @@ class NCA(nn.Module):
         )
 
         self.paused = False
-        self.brush_radius = 30
+        self.brush_radius = 5
         self.drawing = False
         self.perturbing_weights = False
         self.perturbation_strength = 0.1
         self.noise_strength = 0.01
-        print(self.state.shape)
+        self.visualize = visualize
 
     def perturb_weights(self):
-        self.conv.weight.data[3:, 3:, :, :] += torch.randn_like(self.conv.weight.data[3:, 3:, :, :]) * self.perturbation_strength
+        self.conv.weight.data += torch.randn_like(self.conv.weight.data) * self.perturbation_strength
 
     def forward(self, x):
         # Apply the convolutional layer
         x = self.conv(x)
         
-        # Apply the activation function
         x = nn.ReLU()(x)
-        # batch norm
         x = nn.BatchNorm2d(x.shape[1])(x)
-        # Ensure output is within 0..1 for image data
         x = torch.sigmoid(x)
+        x[:, 0:3, 45:65, 45:65] = 1.0
 
         return x
 
     def apply_rules(self):
         self.state = self.forward(self.state)
 
-    # Define the update function for the animation
-    def update(self, window):
-        add_noise(self.noise_strength, self.state)
+    def draw(self, window=None):
         if self.drawing:
             pos = window.get_cursor_pos()
-            index_y = int(max(self.brush_radius, min(pos[0] * w, w - self.brush_radius)))
-            index_x = h - int(max(self.brush_radius, min(pos[1] * h, h - self.brush_radius)))
-            set_neigh_zero(index_x, index_y, self.brush_radius, self.state)
+            draw_rad_zero(pos[0], pos[1], self.brush_radius, self.state)
+
+    def update(self, window=None):
+        add_noise(self.noise_strength, self.state)
+
+        if self.visualize:
+            self.check_input(window)
+            self.draw(window)
+            write_to_renderer(self.state)
 
         if self.perturbing_weights:
             self.perturb_weights()
-        write_to_renderer(self.state)
     
     def check_input(self, window):
         for e in window.get_events(ti.ui.PRESS):
@@ -109,23 +120,23 @@ class NCA(nn.Module):
             #     self.perturbing_weights = False
 
         
-def main(img_w,img_h):
-    model = NCA(5)
+def main_vis(img_w, img_h, num_ch=5):
+    model = NCA(num_ch, visualize=True)
     window = ti.ui.Window("NCA", (img_w, img_h), fps_limit=200, vsync=True)
     canvas = window.get_canvas()
     gui = window.get_gui()
     steps_per_frame = 1
 
     while window.running:
-        model.check_input(window)
-
         if not model.paused:
             for _ in range(steps_per_frame):
                 model.apply_rules()
             model.update(window)
 
         canvas.set_background_color((1, 1, 1))
-        with gui.sub_window("Options", 0.05, 0.05, 0.9, 0.15) as w:
+        opt_w = min(480 / img_w, img_w)
+        opt_h = min(180 / img_h, img_h)
+        with gui.sub_window("Options", 0.05, 0.05, opt_w, opt_h) as w:
             model.brush_radius = w.slider_int("Brush Radius", model.brush_radius, 1, 50)
             model.noise_strength = w.slider_float("Noise Strength", model.noise_strength, 0.0, 5.0)
             model.perturbation_strength = w.slider_float("Perturbation Strength", model.perturbation_strength, 0.0, 5.0)
@@ -136,4 +147,19 @@ def main(img_w,img_h):
         window.show()
 
 if __name__ == "__main__":
-    main(img_w, img_h)
+    if VISUALIZE:
+        main_vis(img_w, img_h, num_ch=10)
+    else:  
+
+        model = NCA(10, visualize=False)
+
+        # Initialize Timer object with the function to measure
+        t = Timer(model.apply_rules)
+
+        # Measure time taken for 1000 calls
+        time_taken = t.timeit(number=1000)
+
+        # Calculate FPS
+        fps = 1000 / time_taken
+
+        print(f"Frames per second: {fps}")

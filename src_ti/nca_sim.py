@@ -7,10 +7,10 @@ VISUALIZE = True
 
 # arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=ti.metal)
-w, h = 100, 100
+w, h = 400, 400
 n_ch = 12
-n_im = n_ch//3  # 3 channels per image, 3 images next to each other widthwise
-cell_size = 4
+n_im = 1 #n_ch//3  # 3 channels per image, 3 images next to each other widthwise
+cell_size = 2
 img_w, img_h = w * cell_size * n_im, h * cell_size
 render_buffer = ti.Vector.field(
             n=3,
@@ -138,8 +138,8 @@ def main_vis(img_w, img_h, num_ch=5):
         opt_h = min(180 / img_h, img_h)
         with gui.sub_window("Options", 0.05, 0.05, opt_w, opt_h) as w:
             model.brush_radius = w.slider_int("Brush Radius", model.brush_radius, 1, 50)
-            model.noise_strength = w.slider_float("Noise Strength", model.noise_strength, 0.0, 5.0)
-            model.perturbation_strength = w.slider_float("Perturbation Strength", model.perturbation_strength, 0.0, 5.0)
+            model.noise_strength = w.slider_float("Noise Strength", model.noise_strength, 0.0, 2.0)
+            model.perturbation_strength = w.slider_float("Perturbation Strength", model.perturbation_strength, 0.0, 20.0)
             steps_per_frame = w.slider_int("Steps per Frame", steps_per_frame, 1, 100)
             model.paused = w.checkbox("Pause", model.paused)
             model.perturbing_weights = w.checkbox("Perturb Weights", model.perturbing_weights)
