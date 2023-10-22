@@ -53,16 +53,16 @@ class Simulation:
             else:
                 self.channel(chid, ch)
 
-
     def channel(self, id: str, dtype=ti.f32, **kwargs):
         if self.data is not None:
             raise ValueError("Cannot add channel after world is defined (yet)")
-        self.__setitem__(id, Channel(**kwargs))
+        self.__setitem__(id, Channel(dtype=dtype, **kwargs))
     
     def init_data(self):
-        self.data = ti.Struct.field(
-            {chid: self[chid].dtype for chid in self.channel_ids},
-            shape=self.shape)
+        self.celltype = ti.types.struct(**{chid: self[chid].dtype for chid in self.channel_ids})
+        self.data = self.celltype.field(shape=self.shape)
+        self.data = self.data.to_torch()
+        return self.data
 
     def __getitem__(self, key):
         return self.metadata.get(key)
