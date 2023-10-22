@@ -2,11 +2,11 @@ import torch
 from typing import Tuple
 from src import Simulation, Channel
 
-def random_agent(sim: Simulation, capital: Channel, muscles: Channel, communication: Channel, metadata: dict):
+def random_noise(sim: Simulation, metadata: dict):
     for aff_id in metadata["affected_channel_ids"]:
-        sim.channels[aff_id].contents = torch.rand(sim.channels[aff_id].shape)*2-1
+        sim.channels[aff_id].contents.data = torch.rand(sim.channels[aff_id].shape)*2-1
 
-def regen_ports(sim: Simulation, ports: Channel):
+def regen_ports(sim: Simulation, ports: Channel, metadata: dict):
     # TODO: take into account resource size and obstacles?
     period = sim.metadata["period"]
     port_id_map = ports.metadata["port_id_map"]
@@ -48,7 +48,7 @@ def grow_muscle_csa(
 
     # Grow muscle from capital, if possible
     total_csa_deltas = torch.sum(positive_csa_deltas, dim=0)
-    total_csa_deltas_safe = torch.where(total_csa_deltas == 0, torch.zeros_like(total_csa_deltas), total_csa_deltas)
+    total_csa_deltas_safe = torch.where(total_csa_deltas == 0, torch.ones_like(total_csa_deltas), total_csa_deltas)
     csa_delta_distribution = positive_csa_deltas.div(total_csa_deltas_safe.unsqueeze(0))
     del total_csa_deltas_safe # TODO: Free CUDA memory? Garbage Collect?  
 
@@ -72,16 +72,16 @@ def activate_muscles(muscle_radii: torch.Tensor, activations: torch.Tensor):
     return (torch.sign(muscle_radii) * (muscle_radii ** 2)).mul(activations)    # Activation is a percentage (kinda) of CSA
 
 def activate_port_muscles(
-        sim: Simulation, capital_ch: Channel, ports_ch: Channel, port_muscle_radii_ch: Channel,
-        port_activations_ch: Channel, metadata: dict):
+        sim: Simulation, capital_ch: Channel, ports_ch: Channel, obstacles_ch: Channel,
+        port_muscle_radii_ch: Channel, port_activations_ch: Channel, metadata: dict):
     # TODO: REALLY? NEGATIVE CAPITAL
-
     port_cost = metadata["port_cost"]
-    capital = capital_ch.contents
-    ports = ports_ch.contents
-    port_muscle_radii = port_muscle_radii_ch.contents
-    port_activations = port_activations_ch.contents
-    
+    capital = capital_ch.contents.squeeze(0)
+    ports = ports_ch.contents.squeeze(0)
+    port_muscle_radii = port_muscle_radii_ch.contents.squeeze(0)
+    port_activations = port_activations_ch.contents.squeeze(0)
+
+    port_activations *= (1-obstacles_ch.contents.squeeze(0))
     
     assert capital.min() >= 0, "Capital cannot be negative (before port)"
     desired_delta = activate_muscles(port_muscle_radii, port_activations)
@@ -97,16 +97,16 @@ def activate_port_muscles(
     assert capital.min() >= 0, "Capital cannot be negative (after port)"
 
 
-def activate_mine_muscles(
+def activate_mine_muscles(sim: Simulation,
         capital_ch: Channel, obstacles_ch: Channel, waste_ch: Channel,
         mine_muscle_radii_ch: Channel, mine_activation_ch: Channel, metadata: dict):
     
     mining_cost = metadata["mining_cost"]
-    capital = capital_ch.contents
-    obstacles = obstacles_ch.contents
-    waste = waste_ch.contents
-    mine_muscle_radii = mine_muscle_radii_ch.contents
-    mine_activation = mine_activation_ch.contents
+    capital = capital_ch.contents.squeeze(0)
+    obstacles = obstacles_ch.contents.squeeze(0)
+    waste = waste_ch.contents.squeeze(0)
+    mine_muscle_radii = mine_muscle_radii_ch.contents.squeeze(0)
+    mine_activation = mine_activation_ch.contents.squeeze(0)
 
     assert capital.min() >= 0, "Capital cannot be negative (before mine)"
     desired_delta = activate_muscles(mine_muscle_radii, mine_activation)
@@ -122,14 +122,14 @@ def activate_mine_muscles(
     assert capital.min() >= 0, "Capital cannot be negative (after mine)"
     assert obstacles.min() >= 0, "Obstacle cannot be negative (after mine)"
 
-def activate_flow_muscles(
+def activate_flow_muscles(sim: Simulation,
         capital_ch: Channel, waste_ch: Channel, obstacles_ch: Channel,
         flow_muscle_radii_ch: Channel, flow_activations_ch: Channel, metadata: dict):
     
     flow_cost = metadata["flow_cost"]
-    capital = capital_ch.contents
-    waste = waste_ch.contents
-    obstacles = obstacles_ch.contents
+    capital = capital_ch.contents.squeeze(0)
+    waste = waste_ch.contents.squeeze(0)
+    obstacles = obstacles_ch.contents.squeeze(0)
     flow_muscle_radii = flow_muscle_radii_ch.contents
     flow_activations = flow_activations_ch.contents
 
@@ -160,7 +160,7 @@ def activate_flow_muscles(
     capital.sub_(total_flow.mul(flow_cost))  # enforce cost of flow before distributing
 
     mass = capital + waste
-    percent_waste = waste.div(torch.where(mass == 0, torch.zeros_like(mass), mass))
+    percent_waste = waste.div(torch.where(mass == 0, torch.ones_like(mass), mass))
     del mass
     waste_out = percent_waste * total_flow
     capital_out = total_flow - waste_out

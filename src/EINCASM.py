@@ -1,3 +1,6 @@
+import random
+from scipy import signal
+import numpy as np
 import torch
 from src import (
     Simulation,
@@ -66,8 +69,8 @@ class EINCASM:
         self.sim.add_subchannel(MINE_M, MUSCLES, indices = [self.kernel.shape[0]+1])
         self.sim.add_channel(ALL_MUSCLE_ACT, num_layers=3, allowed_range=[-1, 1])
         self.sim.add_subchannel(FLOW_MACT, ALL_MUSCLE_ACT, indices = 0)
-        self.sim.add_subchannel( PORT_MACT, ALL_MUSCLE_ACT, indices = 1)
-        self.sim.add_subchannel( MINE_MACT, ALL_MUSCLE_ACT, indices = 2)
+        self.sim.add_subchannel(PORT_MACT, ALL_MUSCLE_ACT, indices = 1)
+        self.sim.add_subchannel(MINE_MACT, ALL_MUSCLE_ACT, indices = 2)
         # flow, port, and mine muscles treated equally during growth
         self.sim.add_channel(GROWTH_ACT, num_layers = self.kernel.shape[0] + 2)
         self.sim.add_channel(CAPITAL, allowed_range = [0, 100])
@@ -76,49 +79,61 @@ class EINCASM:
         self.sim.add_channel(PORTS, init_func = pcg.init_ports_levy, 
                              allowed_range = [-1, 10],
                              metadata = {
-                                 'num_resources': 3,
+                                 'num_resources': 2,
                                  'min_regen_amp': 0.5,
                                  'max_regen_amp': 2,
                                  'alpha_range': [0.4, 0.9],
                                  'beta_range': [0.8, 1.2],
-                                 'num_sites_range': [50, 100]})
+                                 'num_sites_range': [2, 10]})
 
         self.sim.metadata.update({'period': 0.0})
-        self.sim.add_update_function('step_period',
-            lambda sim, md: sim.metadata.update({'period': sim.metadata['period'] + 1}),
+        self.sim.add_rule('step_period',
+            lambda sim, md: sim.metadata.update({'period': sim.metadata['period'] + 0.01}),
             req_sim_metadata = {'period': float})
         
-        self.sim.add_update_function('grow', physics.grow_muscle_csa,
+        self.sim.add_rule('grow', physics.grow_muscle_csa,
             input_channel_ids = [CAPITAL, MUSCLES, GROWTH_ACT],
             affected_channel_ids = [MUSCLES, CAPITAL],
             metadata = {'growth_cost': 0.2})
         
-        self.sim.add_update_function('flow', physics.activate_flow_muscles,
-            input_channel_ids = [CAPITAL, WASTE, FLOW_M, FLOW_MACT, OBSTACLES],
+        self.sim.add_rule('flow', physics.activate_flow_muscles,
+            input_channel_ids = [CAPITAL, WASTE, OBSTACLES, FLOW_M, FLOW_MACT],
             affected_channel_ids = [CAPITAL],
             metadata = {'flow_cost': 0.2, 'kernel': self.kernel})
         
-        self.sim.add_update_function('eat', physics.activate_port_muscles,
+        self.sim.add_rule('eat', physics.activate_port_muscles,
             input_channel_ids = [CAPITAL, PORTS, OBSTACLES, PORT_M, PORT_MACT],
             affected_channel_ids = [CAPITAL],
             metadata = {'port_cost': 0.2})
         
-        self.sim.add_update_function('dig', physics.activate_mine_muscles,
+        self.sim.add_rule('dig', physics.activate_mine_muscles,
             input_channel_ids = [CAPITAL, OBSTACLES, WASTE, MINE_M, MINE_MACT],
             affected_channel_ids = [CAPITAL, WASTE],
             metadata = {'mining_cost': 0.2})
         
-        self.sim.add_update_function('regen_resources', physics.regen_ports,
-            input_channel_ids = [PORTS, OBSTACLES], 
+        self.sim.add_rule('regen_resources', physics.regen_ports,
+            input_channel_ids = [PORTS], 
             affected_channel_ids = [PORTS],
             req_channel_metadata = {PORTS: ['port_id_map', 'port_sizes', 'resources']},
             req_sim_metadata = {'period': float})
         
-        self.sim.add_update_function('random_agent', physics.random_agent,
-            input_channel_ids = [CAPITAL, MUSCLES, COM],
+        def seed_capital(sim, capital, ports, md):
+            if capital.contents.sum() < md['threshold_sum']:
+                coords = np.random.randint(0, capital.contents.shape[1], size=(md['num_sites'], 2))
+                capital.contents[0, coords[:, 0], coords[:, 1]] = torch.rand(md['num_sites']) * 50 + 50
+
+        self.sim.add_rule('seed_capital', seed_capital,
+            input_channel_ids = [CAPITAL, PORTS],
+            affected_channel_ids = [CAPITAL], metadata={
+                "num_sites": 3,
+                "threshold_sum": 2
+            })
+
+        self.sim.add_rule('random_agent', physics.random_noise,
+            input_channel_ids = [],
             affected_channel_ids = [GROWTH_ACT, ALL_MUSCLE_ACT, COM])
 
     def run(self):
         self.sim.init_all_channels()
         for _ in range(1000):
-            self.sim.update()
+            self.sim.apply_all_rules()

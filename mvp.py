@@ -135,7 +135,7 @@ if VERBOSE:
 
     data = []
 
-def update(period):
+def iterate(period):
     for resource in resources:
         resource.update(period, resource_map, port)
 
@@ -164,7 +164,7 @@ def update(period):
 periods = np.linspace(0,np.pi*2,100)
 start = timer()
 for period in periods:
-    update(period)
+    iterate(period)
 end = timer()
 
 print(f"{cfg.device}: Simulated {len(periods)} periods of {cfg.world_shape} in {end-start} seconds")
