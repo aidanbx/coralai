@@ -1,8 +1,11 @@
 import taichi as ti
-import src_ti.Simulation as Simulation
-import importlib
-importlib.reload(Simulation)
-ti.init(arch=ti.gpu)
+import torch
+from src_ti import physics, pcg, simulation, world
+from timeit import Timer
+
+ti_arch = ti.gpu
+torch_device = torch.device('mps:0')
+ti.init(arch=ti_arch)
 
 flow_kernel = ti.Vector.field(2, dtype=ti.i32, shape=5)
 flow_kernel[0] = [0, 0]  # ORIGIN
@@ -11,11 +14,13 @@ flow_kernel[2] = [0, 1]  # RIGHT
 flow_kernel[3] = [1, 0]  # DOWN
 flow_kernel[4] = [0, -1] # LEFT
 
-num_com = 10
-w,h = 2, 1
+num_com = 5
+w, h = 10, 10
 
-sim = Simulation.Simulation(
-    'tst', (w,h),
+simworld = world.World(
+    shape = (w,h),
+    dtype = torch.float32,
+    torch_device = torch_device,
     channels={
         'com': ti.types.vector(n=num_com, dtype=ti.f32),
         'muscles': ti.types.struct(
@@ -41,24 +46,83 @@ sim = Simulation.Simulation(
                 'max_regen_amp': 2,
                 'alpha_range': [0.4, 0.9],
                 'beta_range': [0.8, 1.2],
-                'num_sites_range': [2, 10]}},})
+                'num_sites_range': [2, 10]}}})
 
-data = sim.init_data()
+sim = simulation.Simulation(id = 'tst', world = simworld)
+sim.start()
+print(f"Shape of capital:                               {sim.data['capital'].shape}")
+print(f"Shape of muscles:                               {sim.data['muscles'].shape}")
+print(f"Shape of muscles' port:                         {sim.data[('muscles','port')].shape}")
+print(f"Shape of capital and waste:                     {sim.data[['capital', 'waste']].shape}")
+print(f"Shape of capital and muscles' port:             {sim.data[['capital', ('muscles','port')]].shape}")
+print(f"Shape of capital and muscles' port and flow:    {sim.data[['capital', ('muscles', ['port', 'flow'])]].shape}")
+
+# data = sim.init_data()
+
+# print(data)
+
+# print({chid: sim[chid] for chid in sim.channel_ids})
+
+# print(data)
+
+# ----------------- 4 -----------------
+
+# ctype = ti.types.struct(**{
+#     'a': ti.f32,
+#     'b': ti.types.vector(n=5, dtype=ti.f32),
+#     'c': ti.i8})
+
+# shape = (4,4)
+
+# w = world.World(shape,
+#                 dtype=torch.float32,
+#                 torch_device=torch_device,
+#                 channels={'ctype': ctype})
+# w.malloc()
+
+# print(w.data[('ctype', ['a','c'])])
+
+# ----------------- 4 -----------------
+
+# blah = ti.field(ti.f32, shape=chshape)
+# f2 = ti.field(ti.f32, shape=chshape)
+
+# mem = torch.empty((*chshape,7), dtype = torch.float32)
+# mem[:,:,0] = cfield['a']
+# mem[:,:,1:6] = cfield['b']
+# mem[:,:,6] = f2.to_torch()
+
+# @ti.kernel
+# def memit(mem: ti.types.ndarray()):
+#     for i, j in ti.ndrange(chshape[0], chshape[1]):
+#         for k in ti.static(range(7)):
+#             mem[i,j,k] = ti.cast(k * i / j, ti.f32)
+
+# memit(mem)
+# print(mem)
+# ----------------- 4 -----------------
+
+# for chid in sim.channel_ids:
+#     print(f"{chid}:\n\tdtype: {sim[chid].dtype}\n\tshape{sim[chid].get_shape()}")
+    
+
+# @ti.kernel
+# def apply_physics():
+
+
 
 # ----------------- 3 -----------------
 
 
-@ti.kernel
-def tst_sim(flowm: ti.types.ndarray(), portm: ti.types.ndarray(), minem: ti.types.ndarray()):
-    for i,j in ti.ndrange(w,h):
-        for k in ti.static(range(flow_kernel.shape[0])):
-            flowm[i,j,k] = k
-        portm[i,j] = 2
-        minem[i,j] = 3
+# @ti.kernel
+# def tst_sim(flowm: ti.types.ndarray(), portm: ti.types.ndarray(), minem: ti.types.ndarray()):
+#     for i,j in ti.ndrange(w,h):
+#         for k in ti.static(range(flow_kernel.shape[0])):
+#             flowm[i,j,k] = k
+#         portm[i,j] = 2
+#         minem[i,j] = 3
 
-tst_sim(data['muscles']['flow'], data['muscles']['port'], data['muscles']['mine'])
-
-print(data['muscles'])
+# tst_sim(data['muscles']['flow'], data['muscles']['port'], data['muscles']['mine'])
 
 # ----------------- 2 -----------------
 # @ti.dataclass

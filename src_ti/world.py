@@ -65,8 +65,10 @@ class World:
             else:
                 if tensor_dict[chid].dtype != self.dtype:
                     warnings.warn(f"Warning: The dtype of channel[{chid}] ({tensor_dict[chid].dtype}) does not match the dtype of its world. Casting to {self.dtype}.")
+                if len(tensor_dict[chid].shape) == 2:
+                    tensor_dict[chid] = tensor_dict[chid].unsqueeze(2)
                 mem[:, :, chindices['indices']] = tensor_dict[chid].type(self.dtype)
-                channel_dict[chid].index(chindices['indices'])
+                channel_dict[chid].index(chindices['indices'], mem)
         return mem, channel_dict
     
     def _index_subchannels(self, subchdict, start_ind, parent_chid):
@@ -91,7 +93,7 @@ class World:
         for chid, chdata in tensor_dict.items():
             if isinstance(chdata, torch.Tensor):
                 ch_depth = self.check_ch_shape(chdata.shape)
-                {'indices': [i for i in range(endlayer_pointer, endlayer_pointer + ch_depth)]}
+                index_tree[chid] = {'indices': [i for i in range(endlayer_pointer, endlayer_pointer + ch_depth)]}
                 endlayer_pointer += ch_depth
             elif isinstance(chdata, dict):
                 subch_tree, total_depth = self._index_subchannels(chdata, endlayer_pointer, chid)
@@ -130,25 +132,26 @@ class World:
 
         def __getitem__(self, key):
             if isinstance(key, tuple):
-                return self.mem[self._get_tuple_inds(key)]
+                return self.mem[:, :, self._get_tuple_inds(key)]
             elif isinstance(key, list):
                 inds = []
                 for chid in key:
                     if isinstance(chid, tuple):
                         inds += self._get_tuple_inds(chid)
                     else:
-                        inds += self.index_tree[chid]
-                return self.mem[inds]
+                        inds += self.index_tree[chid]['indices']
+                return self.mem[:, :, inds]
             else:
-                return self.mem[self.index_tree[key]['indices']]
+                return self.mem[:, :, self.index_tree[key]['indices']]
         
         def __setitem__(self, key, value):
-            if isinstance(key, tuple):
-                chid = key[0]
-                subchid = key[1]
-                self.mem[self.index_tree[chid]['subchannels'][subchid]['indices']] = value
-            else:
-                self.mem[self.index_tree[key]['indices']] = value
+            raise ValueError("Cannot set world data directly. Use world.add_channels() or world.add_channel() to add channels to the world.")
+            # if isinstance(key, tuple):
+            #     chid = key[0]
+            #     subchid = key[1]
+            #     self.mem[:,:,self.index_tree[chid]['subchannels'][subchid]['indices']] = value
+            # else:
+            #     self.mem[self.index_tree[key]['indices']] = value
 
     def __setitem__(self, key, value):
         if self.mem is not None:
@@ -156,8 +159,6 @@ class World:
         else:
             self.add_channels({key: value})
     
-
-                    
 class Channel:
     def __init__(
             self, id=None, dtype=ti.f32,
