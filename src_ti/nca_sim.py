@@ -7,15 +7,16 @@ VISUALIZE = True
 
 # arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=ti.metal)
-w, h = 400, 400
+w, h = 200, 200
 n_ch = 12
-n_im = 1 #n_ch//3  # 3 channels per image, 3 images next to each other widthwise
-cell_size = 2
+n_im = 3 #n_ch//3  # 3 channels per image, 3 images next to each other widthwise
+cell_size = 8
 img_w, img_h = w * cell_size * n_im, h * cell_size
 render_buffer = ti.Vector.field(
             n=3,
             dtype=ti.f32,
             shape=(img_w, img_h)
+        
         )
 
 @ti.kernel
@@ -49,9 +50,9 @@ def draw_rad_zero(
                 state[0, offset+ch, (i + ind_x * n_im) % w, (j + ind_y) % h] *= 0.001
 
 
-class NCA(nn.Module):
+class NCA:
     def __init__(self, channel_count, visualize = True):
-        super(NCA, self).__init__()
+        # super(NCA, self).__init__()
         self.state = torch.rand(1, channel_count, w, h)
         self.conv = nn.Conv2d(
             channel_count,
@@ -76,7 +77,7 @@ class NCA(nn.Module):
         # Apply the convolutional layer
         x = self.conv(x)
         
-        x = nn.ReLU()(x)
+        x = nn.LeakyReLU()(x)
         x = nn.BatchNorm2d(x.shape[1])(x)
         x = torch.sigmoid(x)
         x[:, 0:3, 45:65, 45:65] = 1.0
@@ -122,7 +123,7 @@ class NCA(nn.Module):
         
 def main_vis(img_w, img_h, num_ch=5):
     model = NCA(num_ch, visualize=True)
-    window = ti.ui.Window("NCA", (img_w, img_h), fps_limit=200, vsync=True)
+    window = ti.ui.Window("NCA", (img_w, img_h), fps_limit=20, vsync=True)
     canvas = window.get_canvas()
     gui = window.get_gui()
     steps_per_frame = 1
@@ -139,7 +140,7 @@ def main_vis(img_w, img_h, num_ch=5):
         with gui.sub_window("Options", 0.05, 0.05, opt_w, opt_h) as w:
             model.brush_radius = w.slider_int("Brush Radius", model.brush_radius, 1, 50)
             model.noise_strength = w.slider_float("Noise Strength", model.noise_strength, 0.0, 2.0)
-            model.perturbation_strength = w.slider_float("Perturbation Strength", model.perturbation_strength, 0.0, 20.0)
+            model.perturbation_strength = w.slider_float("Perturbation Strength", model.perturbation_strength, 0.0, 1.0)
             steps_per_frame = w.slider_int("Steps per Frame", steps_per_frame, 1, 100)
             model.paused = w.checkbox("Pause", model.paused)
             model.perturbing_weights = w.checkbox("Perturb Weights", model.perturbing_weights)
