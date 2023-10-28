@@ -1,6 +1,6 @@
 import torch
 import taichi as ti
-from src_ti.torch_world import World
+from src_ti.world import World
 
 @ti.data_oriented
 class Physics:

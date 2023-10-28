@@ -7,10 +7,10 @@ VISUALIZE = True
 
 # arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=ti.metal)
-w, h = 100, 100
-n_ch = 3
+w, h = 400, 400
+n_ch = 6
 n_im = n_ch//3  # 3 channels per image, nim images next to each other widthwise
-cell_size = 8
+cell_size = 2
 img_w, img_h = w * cell_size * n_im, h * cell_size
 render_buffer = ti.Vector.field(
             n=3,
@@ -52,9 +52,9 @@ def draw_rad_zero(
 # torch.Size([10, 400, 400]) torch.Size([10, 10, 3, 3])
 @ti.kernel
 def conv2d(state: ti.types.ndarray(ndim=3), weights: ti.types.ndarray(ndim=4), out: ti.types.ndarray(ndim=3)):
-    for o_chid, i, j in ti.ndrange(3, 100, 100):
+    for o_chid, i, j in ti.ndrange(n_ch, w, h):
         o_chsum = 0.0
-        for in_chid, offi, offj in ti.ndrange((0, 3), (-1, 2), (-1, 2)):
+        for in_chid, offi, offj in ti.ndrange(n_ch, (-1, 2), (-1, 2)):
             ci = (i + offi) % w
             cj = (j + offj) % h
             o_chsum += weights[in_chid, o_chid, offi, offj] * state[in_chid, ci, cj]
@@ -96,7 +96,8 @@ class NCA(nn.Module):
         x = torch.sigmoid(x)
         x = torch.tanh(x)
         x = x.squeeze(0)
-        x[:, 45:50, 45:75] = 0.0
+        # print(x.min(), x.max())
+        # x[:, 45:50, 45:75] = 0.0
         return x
 
     def apply_rules(self):
@@ -124,8 +125,8 @@ class NCA(nn.Module):
                 exit()
             if e.key == ti.ui.LMB and window.is_pressed(ti.ui.SHIFT):
                 self.drawing = True
-            # elif e.key == ti.ui.SPACE:
-            #     self.paused = not self.paused
+            elif e.key == ti.ui.SPACE:
+                self.state *= 0.01
             # elif e.key == 'r':
             #     self.perturbing_weights = True
 
@@ -138,7 +139,7 @@ class NCA(nn.Module):
         
 def main_vis(img_w, img_h, num_ch):
     model = NCA(num_ch, visualize=True)
-    window = ti.ui.Window("NCA", (img_w, img_h), fps_limit=15, vsync=True)
+    window = ti.ui.Window("NCA", (img_w, img_h), fps_limit=50, vsync=True)
     canvas = window.get_canvas()
     gui = window.get_gui()
     steps_per_frame = 1

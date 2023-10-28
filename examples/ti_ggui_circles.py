@@ -12,7 +12,6 @@ per_vertex_color = ti.Vector.field(3, ti.f32, shape=max_num_particles)
 
 @ti.kernel
 def new_particle(pos_x: ti.f32, pos_y: ti.f32, fixed_: ti.i32):
-    # Taichi doesn't support using vectors as kernel arguments yet, so we pass scalars
     new_particle_id = num_particles[None]
     x[new_particle_id] = [pos_x, pos_y]
     num_particles[None] += 1

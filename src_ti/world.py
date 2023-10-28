@@ -15,9 +15,7 @@ class Channel:
         self.metadata.update(kwargs)
         self.init_func = init_func
         self.dtype = dtype
-        self.memblock = None
-        self.indices = None
-    
+
     def __getitem__(self, key):
         return self.metadata.get(key)
 
@@ -26,16 +24,13 @@ class Channel:
             
 @ti.data_oriented
 class World:
-    def __init__(self, shape, dtype, channels: dict=None):
-        self.shape = (*shape, 0)
+    def __init__(self, shape, channels: dict=None):
+        self.shape = shape # shape is just (w,h), unlike torch world wich is (channels, w, h)
         self.channels = {}
         self.memory_allocated = False
         if channels is not None:
             self.add_channels(channels)
-        self.tensor_dict = None
         self.mem = None
-        self.data = None
-        self.index = None
 
     def add_channel(self, id: str, dtype=ti.f32, **kwargs):
         if self.memory_allocated:
@@ -59,8 +54,11 @@ class World:
     def malloc(self):
         if self.memory_allocated:
             raise ValueError(f"Cannot allocate world memory twice.")
+        
         celltype = ti.types.struct(**{chid: self.channels[chid].dtype for chid in self.channels.keys()})
         self.mem = celltype.field(shape=self.shape[:2])
-
+        self.memory_allocated = True
+        return self.mem
+    
     def __getitem__(self, key):
         return self.channels.get(key)

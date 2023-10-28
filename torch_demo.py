@@ -2,7 +2,7 @@ import taichi as ti
 import torch
 import torch.nn as nn
 from src_ti import physics, pcg
-from src_ti.torch_world import World
+from src_ti.world import World
 from timeit import Timer
 
 class eincasm:
@@ -22,10 +22,10 @@ class eincasm:
         self.num_com = num_com
 
         self.world, self.sensors, self.actuators = self.define_world()
-        self.world.malloc_torch()
+        self.world.malloc()
         # TODO: A bit silly since Torch creates new tensors for conv2d - switch to taichi NN? LOL
         # Necessary to generate the index tree
-        self.actuators.malloc_torch()
+        self.actuators.malloc()
 
         self.paused = False
         self.brush_radius = 5
@@ -57,10 +57,10 @@ class eincasm:
                     mine=ti.f32,),
                 'capital':  {'lims': (0,10)},
                 'waste':    {'lims': (0,1)},
-                'obstacle': {'lims': (0,1), 'init': pcg.init_obstacles_perlin},
+                'obstacle': {'lims': (0,1), 'init_func': pcg.init_obstacles_perlin},
                 'port': {
                     'lims': (-1,10),
-                    'init': pcg.init_ports_levy,
+                    'init_func': pcg.init_ports_levy,
                     'metadata': {
                         'num_resources': 2,
                         'min_regen_amp': 0.5,
@@ -88,7 +88,6 @@ class eincasm:
                     port=ti.f32,
                     mine=ti.f32)})
         
-        # self.world.add_channel()
     
         return self.world, self.sensors, self.actuators
 
@@ -98,7 +97,9 @@ class eincasm:
 
 
 
-ein = eincasm(w=3,h=3)
+ein = eincasm(w=100,h=100)
+ein.world.set_init_chdata()
+print(ein.world['obstacle'].init_func)
 print(ein.world.data['obstacle'])
 # ein.world.initall()a
 # ein.applay_rules()
