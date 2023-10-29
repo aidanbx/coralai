@@ -1,12 +1,15 @@
 import taichi as ti
+import torch
 from src_ti.world import World
 
 @ti.data_oriented
 class eincasm:
-    def __init__(self, shape=None, num_com=5, flow_kernel=None):
+    def __init__(self, shape=None, torch_device=torch.device('cpu'),
+                 num_com=5, flow_kernel=None):
         if shape is None:
             shape = (100,100)
         self.shape = shape
+        self.torch_device = torch_device
         
         if flow_kernel is None:
             flow_kernel = ti.Vector.field(2, dtype=ti.i32, shape=5)
@@ -24,6 +27,8 @@ class eincasm:
     def world_def(self):
         return World(
             shape = self.shape,
+            torch_dtype=torch.float32,
+            torch_device=self.torch_device,
             channels = {
                 'muscles': ti.types.struct(
                     flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
@@ -51,7 +56,3 @@ class eincasm:
                     port=ti.f32,
                     mine=ti.f32),
                 'com': ti.types.vector(n=self.num_com, dtype=ti.f32)})
-
-    def apply_rules(self):
-        self.actuators.mem = self.random_org(self.world.data[self.sensors].unsqueeze(0))
-        # self.actuators.mem.

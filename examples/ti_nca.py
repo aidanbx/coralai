@@ -126,7 +126,7 @@ class NCA(nn.Module):
             if e.key == ti.ui.LMB and window.is_pressed(ti.ui.SHIFT):
                 self.drawing = True
             elif e.key == ti.ui.SPACE:
-                self.state *= 0.01
+                self.state *= 0.0
             # elif e.key == 'r':
             #     self.perturbing_weights = True
 
