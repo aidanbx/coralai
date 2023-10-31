@@ -1,36 +1,18 @@
 import taichi as ti
-import src_ti.eincasm as eincasm
-import src_ti.pcg as pcg_ti
+import torch
+from src_ti.eincasm import eincasm
+from src_ti.visualize import PixelVis
 
-ti.init(arch=ti.gpu)
+ti.init(ti.gpu)
+ein = eincasm(shape=(3,3), torch_device=torch.device('mps'))
+ein.world.malloc()
+print(ein.world.index[['capital', 'waste', 'muscles', 'obstacle']])
 
-SIM_WIDTH = 640
-SIM_HEIGHT = 480
+# ein.world.malloc()
 
-# einfield = eincasm.eincell.field(shape=(sim_width, sim_height))
+# vis = PixelVis(ein.world, ['capital', 'waste', 'port', 'obstacle'])
 
-gray_scale_image = ti.field(dtype=ti.f32, shape=(SIM_WIDTH, SIM_HEIGHT))
-einfield = eincasm.Cell.field(shape=(SIM_WIDTH, SIM_HEIGHT))
-einfield.bla = 2
-
-@ti.func
-def init_sim(state):
-    for i,j in state:
-        state[i,j]['ob'] = ti.random()
-
-@ti.kernel
-def fill_image(state: ti.template()):
-    init_sim(state)
-    # Fills the image with random gray
-    for i,j in gray_scale_image:
-        gray_scale_image[i,j] = state[i,j].ob
-
-# fill_image(einfield)
-# print(einfield.keys())
-# # Creates a GUI of the size of the gray-scale image
-# gui = ti.GUI('gray-scale image of random values', (SIM_WIDTH, SIM_HEIGHT))
-# while gui.running:
-#     gui.set_image(gray_scale_image)
-#     gui.show()
-
-
+# while True:
+#     # ein.apply_rules()
+#     vis.update()
+#     # vis.render()
