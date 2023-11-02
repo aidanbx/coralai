@@ -2,22 +2,10 @@ import torch
 import taichi as ti
 from src_ti.world import World
 
-@ti.data_oriented
-class Physics:
-    def __init__(self, world: World):
-        self.world = world
-
-    # @ti.func
-    # def grow_muscle_csa_ti(self, mem: ti.types.ndarray(), capital_ids, muscle_ids, gract_ids, growth_efficiency):
-    #     for 
-
-
-
 
 def regen_ports(ports, period, port_id_map, resources):
     # TODO: take into account resource size and obstacles?
     port_id_map = ports.metadata["port_id_map"]
-    # port_sizes = ports.metadata["port_sizes"]
     resources = ports.metadata["resources"]
     for resource in resources:
         ports.contents.squeeze(0)[port_id_map == resource.id] += resource.regen_func(period)

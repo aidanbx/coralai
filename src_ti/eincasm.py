@@ -1,6 +1,9 @@
+import numpy as np
 import taichi as ti
 import torch
 from src_ti.world import World
+from src_ti import physics, pcg
+
 
 @ti.data_oriented
 class eincasm:
@@ -20,9 +23,17 @@ class eincasm:
             flow_kernel[4] = [0, -1] # LEFT
 
         self.flow_kernel = flow_kernel
-
         self.num_com = num_com
         self.world = self.world_def()
+        self.world.malloc()
+        self.init_channels()
+        self.timestep = 0 
+
+    def init_channels(self):
+        p, pmap, r = pcg.init_ports_levy(self.shape, self.world.channels['port'].metadata)
+        self.world['port'], self.world['portmap'], self.resources = p, pmap, r
+        self.world['obstacle'] = pcg.init_obstacles_perlin(self.shape, self.world.channels['obstacle'].metadata)
+
 
     def world_def(self):
         return World(
@@ -30,15 +41,11 @@ class eincasm:
             torch_dtype=torch.float32,
             torch_device=self.torch_device,
             channels = {
-                'muscles': ti.types.struct(
-                    flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
-                    port=ti.f32,
-                    mine=ti.f32,),
-                'capital':  {'lims': (0,10)},
-                'waste':    {'lims': (0,1)},
-                'obstacle': {'lims': (0,1)},
+                'capital':  {'lims': [0,10]},
+                'waste':    {'lims': [0,1]},
+                'obstacle': {'lims': [0,1]},
                 'port': {
-                    'lims': (-1,10),
+                    'lims': [-1,10],
                     'metadata': {
                         'num_resources': 2,
                         'min_regen_amp': 0.5,
@@ -47,6 +54,10 @@ class eincasm:
                         'beta_range': [0.8, 1.2],
                         'num_sites_range': [2, 10]},},
                 'portmap': ti.i8,
+                'muscles': ti.types.struct(
+                    flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
+                    port=ti.f32,
+                    mine=ti.f32,),
                 'macts': ti.types.struct(
                     flow=ti.f32,
                     port=ti.f32,

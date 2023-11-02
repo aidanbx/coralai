@@ -4,15 +4,16 @@ from src_ti.eincasm import eincasm
 from src_ti.visualize import PixelVis
 
 ti.init(ti.gpu)
-ein = eincasm(shape=(3,3), torch_device=torch.device('mps'))
-ein.world.malloc()
-print(ein.world.index[['capital', 'waste', 'muscles', 'obstacle']])
+ein = eincasm(shape=(50,50), torch_device=torch.device('mps'))
 
-# ein.world.malloc()
+def update_world():
+    return 0
 
-# vis = PixelVis(ein.world, ['capital', 'waste', 'port', 'obstacle'])
+vis = PixelVis(ein.world, {
+    'capital': 'viridis',
+    'waste': 'hot',
+    'port': 'copper',
+    'obstacle': 'gray'
+}, update_world)
 
-# while True:
-#     # ein.apply_rules()
-#     vis.update()
-#     # vis.render()
+vis.launch()

@@ -57,12 +57,8 @@ def random_signal(num_components=2,
 
     return lambda t: sum([amps[i] * torch.sin(freqs[i] * t + start_periods[i]) for i in range(num_components)]), freqs, amps, start_periods
 
-def init_muscle_radii(shape: tuple, metadata: dict):
-    return torch.zeros(shape, dtype=torch.float32), {}
-
-def init_obstacles_perlin(shape: tuple, metadata: dict):
+def init_obstacles_perlin(shape: tuple, metadata):
     # TODO: convert to taichi
-    shape = shape[1:]
     # TODO: update to batches? 
     empty_threshold = metadata.get("empty_thresh", 0.4)
     full_threshold = metadata.get("full_thresh", 0.6)
@@ -79,14 +75,7 @@ def init_obstacles_perlin(shape: tuple, metadata: dict):
     torch.where(obstacles > full_threshold, torch.tensor(1), obstacles, out=obstacles)
     torch.where(obstacles < empty_threshold,torch.tensor(0), obstacles, out=obstacles)
 
-    return obstacles.unsqueeze(0), {"empty_threshold": empty_threshold,
-                        "full_threshold": full_threshold,
-                        "frequency": frequency,
-                        "octaves": octaves,
-                        "persistence": persistence,
-                        "lacunarity": lacunarity,
-                        "x_offset": x_offset,
-                        "y_offset": y_offset}
+    return obstacles
 
 class Resource:
     # a resource as an id (incremental), a min and max,
@@ -108,12 +97,11 @@ class Resource:
         self.dispersal_func = dispersal_func
 
 def init_ports_levy(shape: tuple, metadata: dict):
-    shape = shape[1:]
     port_id_map = torch.zeros(shape, dtype=torch.int8)
     port_sizes = torch.zeros(shape)
     resources = []
 
-    for port_id in range(1,metadata["num_resources"]+1):
+    for port_id in range(1, metadata["num_resources"]+1):
         # regen_func, freqs, amps, start_periods
         signal_info = random_signal(
         min_amp = metadata["min_regen_amp"], max_amp=metadata["max_regen_amp"])
@@ -139,12 +127,4 @@ def init_ports_levy(shape: tuple, metadata: dict):
                                     'beta': beta,
                                     'num_sites': num_sites,
                                     'object': resource})
-    port_metadata = {
-        'port_id_map': port_id_map,
-        'port_sizes': port_sizes,
-        'resources': resources
-    }
-    for resource in resources:
-        port_metadata[f"resource_{resource.id}_init_info"] = resource.metadata
-
-    return torch.zeros((1, *shape)), port_metadata
+    return torch.zeros(shape), port_id_map, resources
