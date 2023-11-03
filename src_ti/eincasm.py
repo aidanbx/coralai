@@ -4,7 +4,6 @@ import torch
 from src_ti.world import World
 from src_ti import physics, pcg
 
-
 @ti.data_oriented
 class eincasm:
     def __init__(self, shape=None, torch_device=torch.device('cpu'),
@@ -28,12 +27,22 @@ class eincasm:
         self.world.malloc()
         self.init_channels()
         self.timestep = 0 
+        self.cid, self.mids = 0, np.array([1,2])
+
+    @ti.kernel
+    def apply_ti_physics(self, mem: ti.types.ndarray()):
+        physics.tst(self.cid, self.mids)
+        # physics.grow_muscle_csa_ti(mem,
+        #                            self.world.indices['capital'][0],
+        #                            self.world.indices['muscles'], self.world.indices['gracts'],
+        #                            1.0, 0.85, 0.1)
+        # for i, j in ti.ndrange(mem.shape[0], mem.shape[1]):
+        #     mem[i, j, self.world.indices['capital']] += 0.1
 
     def init_channels(self):
         p, pmap, r = pcg.init_ports_levy(self.shape, self.world.channels['port'].metadata)
         self.world['port'], self.world['portmap'], self.resources = p, pmap, r
         self.world['obstacle'] = pcg.init_obstacles_perlin(self.shape, self.world.channels['obstacle'].metadata)
-
 
     def world_def(self):
         return World(

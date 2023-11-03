@@ -6,7 +6,7 @@ import time
 
 
 LEVELS = 20
-BORDER_SIZE = 4
+BORDER_SIZE = 2
 
 @ti.data_oriented
 class PixelVis:
@@ -32,7 +32,7 @@ class PixelVis:
         self.gui = self.window.get_gui()
         self.vid_manager = ti.tools.VideoManager("./pixelvis.mp4")
         self.drawing = False
-        self.ch_to_paint = 0
+        self.ch_to_paint = 3
         self.val_to_paint = 0
         self.prev_time = time.time()
         self.brush_radius = 2
@@ -46,20 +46,33 @@ class PixelVis:
 
     def update(self):
         self.check_events()
-        if self.drawing:
-            current_time = time.time()
-            dt = current_time - self.prev_time
-            self.prev_time = current_time
-            pos = self.window.get_cursor_pos()
-            self.paint_cursor_value(pos[0], pos[1], self.chids[self.ch_to_paint], self.val_to_paint * dt * 5, self.brush_radius//2, self.world.mem)
         self.render_opt_window()
-        self.write_to_image(self.world.mem)
         # self.vid_manager.make_video(gif=True, mp4=True)
+
+        current_time = time.time()
+        dt = current_time - self.prev_time
+        self.prev_time = current_time
+        pos = self.window.get_cursor_pos()
+        vtp = self.val_to_paint * dt * 5
+
+        self.update_vis(self.world.mem,
+                        self.drawing, pos[0], pos[1],
+                        self.chids[self.ch_to_paint], vtp,
+                        self.brush_radius//2, self.ch_lims)
         self.canvas.set_background_color((1, 1, 1))
         self.canvas.set_image(self.image)
         self.window.show() 
 
     @ti.kernel
+    def update_vis(self, mem: ti.types.ndarray(),
+                    drawing: ti.i32,
+                    pos_x: ti.f32, pos_y: ti.f32,
+                    chid: ti.i32, val: ti.f32, br: ti.i32, chlims: ti.types.template()):
+        if drawing:
+            self.paint_cursor_value(mem, pos_x, pos_y, chid, val, br, chlims)
+        self.write_to_image(mem)
+
+    @ti.func
     def write_to_image(self, mem: ti.types.ndarray()):
         for i,j in self.image:
             xind = i//self.cluster_size
@@ -78,9 +91,27 @@ class PixelVis:
                 chid = self.chids[chidx]
                 low = self.ch_lims[chidx, 0]
                 high = self.ch_lims[chidx, 1]
-                chval_norm = (mem[xind, yind, chid] - low) / (high - low)
+                chval = min(max(mem[xind, yind, chid], low), high)
+                chval_norm = (chval - low) / (high - low)
                 self.image[i, j] = self.cmaps[chidx, int(chval_norm * (LEVELS - 1))]
 
+    @ti.func
+    def paint_cursor_value(self,
+                           mem: ti.types.ndarray(),
+                           pos_x: ti.f32, pos_y: ti.f32,
+                           chid: ti.i32, val: ti.f32,
+                           br: ti.i32, chlims: ti.types.template()):
+        """
+        Use cursor position to paint selected value of selected channel - take into account pixel sizes
+        """
+        ind_x = int(pos_x * mem.shape[0])
+        ind_y = int(pos_y * mem.shape[1])
+        for i, j in ti.ndrange((-br, br), (-br, br)):
+            if (i**2) + j**2 < br**2:
+                ix = (i + ind_x) % mem.shape[0]
+                jy = (j + ind_y) % mem.shape[1]
+                mem[ix, jy, chid] = min(max(mem[ix, jy, chid] + val, chlims[chid, 0]), chlims[chid, 1])
+    
     def render_opt_window(self):
         """
         Slider for brush size
@@ -90,7 +121,7 @@ class PixelVis:
         opt_w = min(480 / self.img_w, self.img_w)
         opt_h = min(180 / self.img_h, self.img_h)
         with self.gui.sub_window("Options", 0.05, 0.05, opt_w, opt_h) as w:
-            self.brush_radius = w.slider_int("Brush Radius", self.brush_radius, 1, 200)
+            self.brush_radius = w.slider_int("Brush Radius", self.brush_radius, 1, 20)
             self.ch_to_paint = w.slider_int("Channel to Paint", self.ch_to_paint, 0, 3)
             self.val_to_paint = w.slider_float("Paint delta", self.val_to_paint, -2, 2)
             w.text(f"Painting: {self.chs[self.ch_to_paint]}")
@@ -102,7 +133,7 @@ class PixelVis:
         """
         for e in self.window.get_events(ti.ui.PRESS):
             if e.key in [ti.ui.ESCAPE]:
-                exit()
+                self.window.running = False
         
         if self.window.is_pressed(ti.ui.LMB) and self.window.is_pressed(ti.ui.SPACE):
             self.drawing = True
@@ -112,24 +143,6 @@ class PixelVis:
         for e in self.window.get_events(ti.ui.RELEASE):
             if e.key == ti.ui.LMB:
                 self.drawing = False
-
-    @ti.kernel
-    def paint_cursor_value(self,
-                           pos_x: ti.f32, pos_y: ti.f32,
-                           chid: ti.i32, val: ti.f32,
-                           br: ti.i32,
-                           mem: ti.types.ndarray()):
-        """
-        Use cursor position to paint selected value of selected channel - take into account pixel sizes
-        """
-        ind_x = int(pos_x * mem.shape[0])
-        ind_y = int(pos_y * mem.shape[1])
-        for i, j in ti.ndrange((-br, br), (-br, br)):
-            if (i**2) + j**2 < br**2:
-                ix = (i + ind_x) % mem.shape[0]
-                jy = (j + ind_y) % mem.shape[1]
-                mem[ix, jy, chid] += val
-                mem[ix, jy, chid] = min(max(mem[ix, jy, chid], self.ch_lims[chid, 0]), self.ch_lims[chid, 1])
 
 
     def process_ch_cmaps(self, ch_cmaps):

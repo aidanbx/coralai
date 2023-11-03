@@ -25,6 +25,7 @@ class Channel:
     
     def link_to_mem(self, indices, memblock):
         self.memblock = memblock
+        indices = np.array(indices)
         if len(indices) == 1:
             indices = indices[0]
         self.indices = indices
@@ -120,8 +121,12 @@ class World:
             if not isinstance(subch, torch.Tensor):
                 raise ValueError(f"World: Channel grouping only supported up to a depth of 2. Subchannel {subchid} of channel {parent_chid} must be a torch.Tensor. Got type: {type(subch)}")
             subch_depth = self.check_ch_shape(subch.shape)
+            inds = [i for i in range(end_ind, end_ind+subch_depth)]
+            inds_ti = ti.field(ti.i32, shape=(len(inds),))
+            inds_ti.from_numpy(np.array(inds))
             subch_tree[subchid] = {
-                'indices': [i for i in range(end_ind, end_ind+subch_depth)]
+                'indices': inds,
+                'indices_ti': inds_ti
             }
             end_ind += subch_depth
         return subch_tree, end_ind-start_ind
@@ -137,13 +142,20 @@ class World:
         for chid, chdata in tensor_dict.items():
             if isinstance(chdata, torch.Tensor):
                 ch_depth = self.check_ch_shape(chdata.shape)
-                index_tree[chid] = {'indices': [i for i in range(endlayer_pointer, endlayer_pointer + ch_depth)]}
+                inds = [i for i in range(endlayer_pointer, endlayer_pointer + ch_depth)]
+                inds_ti = ti.field(ti.i32, shape=(len(inds),))
+                inds_ti.from_numpy(np.array(inds))
+                index_tree[chid] = {'indices': inds, 'indices_ti': inds_ti}
                 endlayer_pointer += ch_depth
             elif isinstance(chdata, dict):
                 subch_tree, total_depth = self._index_subchannels(chdata, endlayer_pointer, chid)
+                inds = [i for i in range(endlayer_pointer, endlayer_pointer + total_depth)]
+                inds_ti = ti.field(ti.i32, shape=(len(inds),))
+                inds_ti.from_numpy(np.array(inds))
                 index_tree[chid] = {
                     'subchannels': subch_tree,
-                    'indices': [i for i in range(endlayer_pointer, endlayer_pointer + total_depth)]
+                    'indices': inds,
+                    'indices_ti': inds_ti
                 }
                 endlayer_pointer += total_depth
                 
@@ -157,49 +169,76 @@ class World:
     def __getitem__(self, key):
         if self.mem is None:
             raise ValueError(f"World: World memory not allocated yet, cannot get {key}")
-        return self.mem[self.indices[key]]
+        indices_return_ti = self.indices.does_return_ti
+        self.indices.return_ti(False)
+        val = self.mem[:, :, self.indices[key]]
+        self.indices.return_ti(indices_return_ti)
+        return val
 
     def __setitem__(self, key, value):
         if self.mem is None:
             raise ValueError(f"World: World memory not allocated yet, cannot set {key}")
+        indices_return_ti = self.indices.does_return_ti
+        self.indices.return_ti(False)
         indices = self.indices[key]
+        self.indices.return_ti(indices_return_ti)
         if len(indices) > 1:
             if value.shape != self[key].shape:
                 raise ValueError(f"World: Cannot set channel(s) {key} to value of shape {value.shape}. Expected shape: {self[key].shape}")
-            self.mem[:, :, indices] = value
+            self.mem[:, :, indices].copy_(value)
         if len(indices) == 1:
+            if len(value.shape) == 3:
+                value = value.squeeze(2)
             if value.shape != self.shape[:2]:
                 raise ValueError(f"World: Cannot set channel {key} to value of shape {value.shape}. Expected shape: {self.shape[:2]}")
-            self.mem[:, :, indices[0]] = value
-            
+            self.mem[:, :, indices[0]].copy_(value)
+
     class _windex:
         def __init__(self, index_tree):
             self.index_tree = index_tree
+            self.does_return_ti = False
 
         def _get_tuple_inds(self, key_tuple):
             chid = key_tuple[0]
             subchid = key_tuple[1]
             if isinstance(subchid, list):
                 inds = []
+                if self.does_return_ti:
+                    raise ValueError(f"World _windex: {key_tuple}: Cannot return ti field for multi index :( - set .return_ti(False) for np array")
                 for subchid_single in key_tuple[1]:
                     inds += self.index_tree[chid]['subchannels'][subchid_single]['indices']
             else:
-                inds = self.index_tree[chid]['subchannels'][subchid]['indices']
+                if self.does_return_ti:
+                    inds = self.index_tree[chid]['subchannels'][subchid]['indices_ti']
+                else:
+                    inds = self.index_tree[chid]['subchannels'][subchid]['indices']
             return inds
+        
+        def return_ti(self, does_return_ti=True):
+            self.does_return_ti = does_return_ti
 
         def __getitem__(self, key):
             if isinstance(key, tuple):
-                return self._get_tuple_inds(key)
+                if self.does_return_ti:
+                    return self._get_tuple_inds(key)
+                return np.array(self._get_tuple_inds(key))
+            
             elif isinstance(key, list):
+                if self.does_return_ti:
+                    raise ValueError(f"World _windex: {key}: Cannot return ti field for multi index :( - set .return_ti(False) for np array")
                 inds = []
                 for chid in key:
                     if isinstance(chid, tuple):
                         inds += self._get_tuple_inds(chid)
                     else:
                         inds += self.index_tree[chid]['indices']
-                return inds
+                if self.does_return_ti:
+                    return self.to_ti(inds)
+                return np.array(inds)
             else:
-                return self.index_tree[key]['indices']
+                if self.does_return_ti:
+                    return self.index_tree[key]['indices_ti']
+                return np.array(self.index_tree[key]['indices'])
         
         def __setitem__(self, key, value):
             raise ValueError(f"World: World indices are read-only. Cannot set index {key} to {value} - get/set to the world iteself")

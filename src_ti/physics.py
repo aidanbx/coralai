@@ -26,6 +26,34 @@ def regen_ports(ports, period, port_id_map, resources):
 #         out[o_chid, i, j] = o_chsum
 
 
+@ti.func
+def grow_muscle_csa_ti(mem: ti.types.ndarray(),
+                       capital_id: ti.i32, muscle_ids, growth_ids,
+                       capital_density: ti.f32, growth_efficiency: ti.f32,
+                       min_growth: ti.f32):
+    
+    if muscle_ids.shape[0] != growth_ids.shape[0]:
+        raise ValueError("Physics: Muscle and growth activation ids must be the same size")
+    for i,j in ti.ndrange(mem.shape[0], mem.shape[1]):
+        assert mem[i,j,capital_id] >= 0, "Capital cannot be negative (before growth)"
+        for mid in ti.static(range(muscle_ids.shape[0])):
+            if mem[i, j, muscle_ids[mid]] <= min_growth:
+                continue
+            mrad = mem[i, j, muscle_ids[mid]]
+            cap = mem[i, j, capital_id]
+            mgrowth = mem[i, j, growth_ids[mid]]
+            csa_delta = (mrad + mgrowth)**2 - mrad**2
+            if csa_delta < 0:
+                mem[i, j, capital_id] += csa_delta * capital_density * growth_efficiency
+                mem[i, j, muscle_ids[mid]] += ti.math.sqrt(csa_delta)
+            if csa_delta > 0:
+                cap_needed = csa_delta * capital_density
+                if cap_needed > cap:
+                    cap_needed = cap
+                    csa_delta = cap / capital_density
+                mem[i, j, capital_id] -= cap_needed
+                mem[i, j, muscle_ids[mid]] += csa_delta * (mgrowth/mgrowth)
+
 
 def grow_muscle_csa(capital, muscle_radii, radii_deltas, growth_cost):
     # TODO: Update to work on batches of environments (simple)
