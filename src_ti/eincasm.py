@@ -1,6 +1,7 @@
 import numpy as np
 import taichi as ti
 import torch
+import torch.nn as nn
 from src_ti.world import World
 from src_ti import physics, pcg
 
@@ -9,11 +10,12 @@ CAPITAL_PER_WORK_GROWTH = 2
 FLOW_COST = 0.2
 CAPITAL_PER_WORK_PORT = 0.5
 CAPITAL_PER_WORK_MINE = 0.5
+LATENT_SIZE = 20
 # MIN_GROWTH = 0.1
 
 @ti.data_oriented
 class eincasm:
-    def __init__(self, shape=None, torch_device=torch.device('cpu'),
+    def __init__(self, shape=None, torch_device=torch.device('mps:0'),
                  num_com=5, flow_kernel=None):
         if shape is None:
             shape = (100,100)
@@ -35,7 +37,67 @@ class eincasm:
         self.init_channels()
         self.timestep = 0 
         self.cid, self.mids = 0, np.array([1,2])
+        self.define_weights()
+        self.perturb_strength = 0.1
     
+    @ti.func
+    def ReLU(self, x):
+        return x if x > 0 else 0
+
+    @ti.func
+    def sigmoid(self, x):
+        return 1 / (1 + ti.exp(-x))
+
+    @ti.kernel
+    def think(self,
+              mem: ti.types.ndarray(),
+              sensor_ids: ti.types.ndarray(),
+              actuator_ids: ti.types.ndarray(),
+              sense_weights: ti.types.ndarray(),
+              latent_layer: ti.types.ndarray(),
+              act_weights: ti.types.ndarray()):
+        for lat_idx, i, j in ti.ndrange(LATENT_SIZE, self.shape[0], self.shape[1]):
+            lat_sum = 0.0
+            for sense_chidx, offi, offj in ti.ndrange(self.n_sensors, (-1, 2), (-1, 2)):
+                ci = (i + offi) % self.shape[0]
+                cj = (j + offj) % self.shape[1]
+                lat_sum += sense_weights[sense_chidx, lat_idx, offi, offj] * mem[ci, cj, sensor_ids[sense_chidx]]
+            latent_layer[lat_idx, i, j] = self.ReLU(lat_sum)
+            
+        for act_idx, i, j in ti.ndrange(self.n_actuators, self.shape[0], self.shape[1]):
+            act_sum = 0.0
+            for lat_idx in ti.static(range(LATENT_SIZE)):
+                act_sum = act_weights[lat_idx, act_idx] * latent_layer[lat_idx, i, j]
+
+            # TODO: APPLY FINAL ACTIVATION BASED ON LIMITS
+            mem[i, j, actuator_ids[act_idx]] = self.sigmoid(act_sum)
+
+    def perturb_weights(self):
+        self.sense_weights += torch.randn_like(self.sense_weights) * self.perturb_strength
+        self.act_weights += torch.randn_like(self.act_weights) * self.perturb_strength
+
+    def ch_norm_(self, input_tensor):
+        # The input tensor shape is assumed to be (width, height, num_channels).
+        # Compute mean and variance.
+        mean = input_tensor.mean(dim=(0, 1), keepdim=True)
+        var = input_tensor.var(dim=(0, 1), keepdim=True, unbiased=False)
+        
+        # The in-place normalization is done next.
+        # Subtract the mean and divide by the standard deviation in place.
+        input_tensor.sub_(mean).div_(torch.sqrt(var + 1e-5))
+    
+    def apply_weights(self):
+        self.think(self.world.mem,
+                    self.sensor_ids,
+                    self.actuator_ids,
+                    self.sense_weights,
+                    self.latent_layer,
+                    self.act_weights)
+        self.ch_norm_(self.world[self.actuators])
+        # self.world.stat('capital')
+        # self.world.stat(self.actuators)
+        # self.world.stat('com')
+
     def apply_physics(self):
         physics.activate_flow_muscles(self.world, self.flow_kernel, FLOW_COST)
         self.apply_ti_physics(self.world.mem, self.world.ti_inds)
@@ -63,7 +125,7 @@ class eincasm:
                 delta_cap_total += delta_cap
                 mem[i,j, ti_inds.muscles[mid]] += new_rad
             capital += delta_cap_total
-            
+
             port = mem[i,j, ti_inds.port]
             port_out = physics.activate_port_muscles_ti(capital,
                                                         port,
@@ -94,6 +156,17 @@ class eincasm:
         p, pmap, r = pcg.init_ports_levy(self.shape, self.world.channels['port'].metadata)
         self.world['port'], self.world['portmap'], self.resources = p, pmap, r
         self.world['obstacle'] = pcg.init_obstacles_perlin(self.shape, self.world.channels['obstacle'].metadata)
+
+    def define_weights(self):
+        self.sensors = ['capital', 'obstacle', 'com']
+        self.actuators = ['muscle_acts', 'growth_acts', 'com']
+        self.sensor_ids = self.world.indices[self.sensors]
+        self.actuator_ids = self.world.indices[self.actuators]
+        self.n_sensors = self.sensor_ids.shape[0]
+        self.n_actuators = self.actuator_ids.shape[0]
+        self.sense_weights = torch.randn(self.n_sensors, LATENT_SIZE, 3, 3)
+        self.latent_layer = torch.zeros(LATENT_SIZE, self.shape[0], self.shape[1])
+        self.act_weights = torch.randn(LATENT_SIZE, self.n_actuators)
 
     def world_def(self):
         return World(

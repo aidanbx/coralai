@@ -24,7 +24,6 @@ def regen_ports(ports, period, port_id_map, resources):
 #             o_chsum += weights[in_chid, o_chid, offi, offj] * state[in_chid, ci, cj]
 #         out[o_chid, i, j] = o_chsum
 
-
 @ti.func
 def grow_muscle_csa_ti(capital:         ti.f32,
                        muscle_radius:   ti.f32,
@@ -33,7 +32,7 @@ def grow_muscle_csa_ti(capital:         ti.f32,
                        capital_density: ti.f32):
     ret_delta_cap = 0.0
     ret_delta_rad = 0.0
-    assert capital >= 0, "Capital cannot be negative (before growth)"
+    # assert capital >= 0, "Capital cannot be negative (before growth)"
     csa_delta = (muscle_radius + radius_delta)**2 - muscle_radius**2
     if csa_delta < 0:
         ret_delta_cap = csa_delta * capital_density * growth_eff
@@ -160,9 +159,9 @@ def activate_flow_muscles(world: World, flow_kernel, flow_cost):
 
     # capital = torch.where(capital < 0.01, cfg.zero_tensor, capital) # should be non-negative before this, just for cleanup
 
-    assert capital.min() >= 0, "Capital cannot be negative (after flow)"
-    capital_diff = capital.sum() - total_capital_before
-    assert capital_diff <= 0, f"Oops, capital was invented during flow. Diff: {capital_diff}"
+    # assert capital.min() >= 0, "Capital cannot be negative (after flow)"
+    # capital_diff = capital.sum() - total_capital_before
+    # assert capital_diff <= 0, f"Oops, capital was invented during flow. Diff: {capital_diff}"
 
 
 

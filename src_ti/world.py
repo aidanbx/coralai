@@ -93,6 +93,16 @@ class World:
             return 1
         else:
             return shape[2]
+    
+    def stat(self, key):
+        # Prints useful metrics about the channel(s) and contents
+        minval = self[key].min()
+        maxval = self[key].max()
+        meanval = self[key].mean()
+        stdval = self[key].std()
+        shape = self[key].shape
+        print(f"{key} stats:\n\tShape: {shape}\n\tMin: {minval}\n\tMax: {maxval}\n\tMean: {meanval}\n\tStd: {stdval}")
+
 
     def _transfer_to_mem(self, mem, tensor_dict, index_tree, channel_dict):
         for chid, chindices in index_tree.items():
@@ -136,6 +146,9 @@ class World:
             }
             end_ind += subch_depth
         return subch_tree, end_ind-start_ind
+
+    def nch(self, key):
+        return self.indices[key].shape[0]
 
     def malloc(self):
         if self.mem is not None:

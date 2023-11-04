@@ -2,18 +2,19 @@ import taichi as ti
 import numpy as np
 from matplotlib.cm import get_cmap
 from src_ti.world import World
+from src_ti.eincasm import eincasm as Eincasm
 import time
-
 
 LEVELS = 20
 BORDER_SIZE = 2
 
 @ti.data_oriented
 class PixelVis:
-    def __init__(self, world: World, ch_cmaps: dict, update_world: callable, scale=None, out_path=None):
-        self.world = world
+    def __init__(self,eincasm: Eincasm, ch_cmaps: dict, update_world: callable, scale=None, out_path=None):
+        self.world = eincasm.world
+        self.eincasm = eincasm
         if scale is None:
-            max_dim = max(world.shape)
+            max_dim = max(self.world.shape)
             desired_max_dim = 800 // 2  # PixelVis uses 2 pixels per cell
             scale = desired_max_dim // max_dim
 
@@ -32,10 +33,11 @@ class PixelVis:
         self.gui = self.window.get_gui()
         self.vid_manager = ti.tools.VideoManager("./pixelvis.mp4")
         self.drawing = False
-        self.ch_to_paint = 3
-        self.val_to_paint = 0
+        self.ch_to_paint = 0
+        self.val_to_paint = 1.5
         self.prev_time = time.time()
         self.brush_radius = 2
+        self.is_perturbing = False
 
     def launch(self):
         while self.window.running:
@@ -55,7 +57,8 @@ class PixelVis:
         self.prev_time = current_time
         pos = self.window.get_cursor_pos()
         vtp = self.val_to_paint * dt * 5
-
+        if self.is_perturbing:
+            self.eincasm.perturb_weights()
         self.update_vis(self.world.mem,
                         self.drawing, pos[0], pos[1],
                         self.chids[self.ch_to_paint], vtp,
@@ -125,6 +128,7 @@ class PixelVis:
             self.brush_radius = w.slider_int("Brush Radius", self.brush_radius, 1, 20)
             self.ch_to_paint = w.slider_int("Channel to Paint", self.ch_to_paint, 0, 3)
             self.val_to_paint = w.slider_float("Paint delta", self.val_to_paint, -2, 2)
+            self.eincasm.perturb_strength = w.slider_float("Perturb Strength", self.eincasm.perturb_strength, 0.0, 5.0)
             w.text(f"Painting: {self.chs[self.ch_to_paint]}")
 
     def check_events(self):
@@ -135,6 +139,8 @@ class PixelVis:
         for e in self.window.get_events(ti.ui.PRESS):
             if e.key in [ti.ui.ESCAPE]:
                 self.window.running = False
+            if e.key == 'p':
+                self.is_perturbing = True
         
         if self.window.is_pressed(ti.ui.LMB) and self.window.is_pressed(ti.ui.SPACE):
             self.drawing = True
@@ -144,7 +150,8 @@ class PixelVis:
         for e in self.window.get_events(ti.ui.RELEASE):
             if e.key == ti.ui.LMB:
                 self.drawing = False
-
+            if e.key == 'p':
+                self.is_perturbing = False
 
     def process_ch_cmaps(self, ch_cmaps):
         ti_cmaps = ti.Vector.field(n=3, dtype=ti.f32, shape=(4, LEVELS))

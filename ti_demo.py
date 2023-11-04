@@ -5,14 +5,15 @@ from src_ti.eincasm import eincasm
 from src_ti.visualize import PixelVis
 import src_ti.physics as physics
 
-ti.init(ti.gpu)
+ti.init(ti.gpu)      
 
 ein = eincasm(shape=(50,50), torch_device=torch.device('mps'))
-
+                 
 def update_world():
     ein.apply_physics()
+    ein.apply_weights()
 
-vis = PixelVis(ein.world, {
+vis = PixelVis(ein,{
     'capital': 'viridis',
     'waste': 'hot',
     'port': 'copper',
