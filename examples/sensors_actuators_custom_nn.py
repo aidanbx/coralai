@@ -23,7 +23,7 @@ ch_types = {
     'muscles': ti.types.vector(flow_kernel.shape[0], dtype=ti.f32),
     'com': ti.types.vector(num_com, dtype=ti.f32),
     'fact': ti.f32,
-    'gracts': ti.types.vector(flow_kernel.shape[0], dtype=ti.f32),
+    'growth_act': ti.types.vector(flow_kernel.shape[0], dtype=ti.f32),
 }
 celltype = ti.types.struct(**ch_types)
 world = celltype.field(shape=(10,10))
@@ -39,7 +39,7 @@ senses_neigh = {
     'obstacle': True
 }
 sensors = senses_neigh.keys()
-actuators = ['fact', 'gracts']
+actuators = ['fact', 'growth_act']
 num_genomes = 3
 sensor_sizes = [
     {'capital': 1, 'muscles': 2, 'com': 3, 'obstacle': 5},
@@ -49,9 +49,9 @@ sensor_sizes = [
 
 latent_sizes = [10,2,3]
 actuator_sizes = [
-    {'fact': 1, 'gracts': 2},
-    {'fact': 3, 'gracts': 4},
-    {'fact': 5, 'gracts': 6},
+    {'fact': 1, 'growth_act': 2},
+    {'fact': 3, 'growth_act': 4},
+    {'fact': 5, 'growth_act': 6},
 ]
 
 activation_funcs = [ti.tanh, ReLu, ti.sin]
