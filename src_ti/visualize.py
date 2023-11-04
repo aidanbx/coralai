@@ -92,7 +92,7 @@ class PixelVis:
                 chid = self.chids[chidx]
                 low = self.ch_lims[chidx, 0]
                 high = self.ch_lims[chidx, 1]
-                chval = min(max(mem[xind, yind, chid], low), high)
+                chval = ti.math.clamp(mem[xind, yind, chid], low, high)
                 chval_norm = (chval - low) / (high - low)
                 self.image[i, j] = self.cmaps[chidx, int(chval_norm * (LEVELS - 1))]
 
@@ -111,7 +111,7 @@ class PixelVis:
             if (i**2) + j**2 < br**2:
                 ix = (i + ind_x) % mem.shape[0]
                 jy = (j + ind_y) % mem.shape[1]
-                mem[ix, jy, chid] = min(max(mem[ix, jy, chid] + val, chlims[chid, 0]), chlims[chid, 1])
+                mem[ix, jy, chid] = ti.math.clamp(mem[ix, jy, chid] + val, chlims[chid, 0], chlims[chid, 1])
     
     def render_opt_window(self):
         """

@@ -3,13 +3,15 @@ import taichi as ti
 import torch
 from src_ti.eincasm import eincasm
 from src_ti.visualize import PixelVis
+import src_ti.physics as physics
 
 ti.init(ti.gpu)
 
 ein = eincasm(shape=(50,50), torch_device=torch.device('mps'))
 
 def update_world():
-    ein.apply_ti_physics(ein.world.mem, ein.world.ti_inds)
+    ein.apply_physics()
+
 vis = PixelVis(ein.world, {
     'capital': 'viridis',
     'waste': 'hot',

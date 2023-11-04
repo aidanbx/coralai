@@ -114,7 +114,6 @@ class World:
                 mem[:, :, chindices['indices']] = tensor_dict[chid].type(self.torch_dtype)
                 channel_dict[chid].link_to_mem(chindices['indices'], mem)
         return mem, channel_dict
-    
 
     def add_ti_inds(self, chid, inds):
         inds=np.array(inds, dtype=np.int32)
@@ -131,7 +130,7 @@ class World:
                 raise ValueError(f"World: Channel grouping only supported up to a depth of 2. Subchannel {subchid} of channel {parent_chid} must be a torch.Tensor. Got type: {type(subch)}")
             subch_depth = self.check_ch_shape(subch.shape)
             inds = [i for i in range(end_ind, end_ind+subch_depth)]
-            self.add_ti_inds(subchid, inds)
+            self.add_ti_inds(parent_chid + "_" + subchid, inds)
             subch_tree[subchid] = {
                 'indices': inds,
             }
