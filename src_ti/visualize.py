@@ -39,7 +39,8 @@ class PixelVis:
 
     def launch(self):
         while self.window.running:
-            self.update_world()
+            if not self.drawing:
+                self.update_world()
             self.update()
             # self.vid_manager.write_frame(self.canvas)
         # self.vid_manager.make_video(gif=True, mp4=True)

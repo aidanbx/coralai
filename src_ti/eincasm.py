@@ -4,6 +4,10 @@ import torch
 from src_ti.world import World
 from src_ti import physics, pcg
 
+GROWTH_EFFICIENCY = 0.85
+CAPITAL_DENSITY = 2
+# MIN_GROWTH = 0.1
+
 @ti.data_oriented
 class eincasm:
     def __init__(self, shape=None, torch_device=torch.device('cpu'),
@@ -28,16 +32,19 @@ class eincasm:
         self.init_channels()
         self.timestep = 0 
         self.cid, self.mids = 0, np.array([1,2])
-
+    
     @ti.kernel
-    def apply_ti_physics(self, mem: ti.types.ndarray()):
-        physics.tst(self.cid, self.mids)
-        # physics.grow_muscle_csa_ti(mem,
-        #                            self.world.indices['capital'][0],
-        #                            self.world.indices['muscles'], self.world.indices['gracts'],
-        #                            1.0, 0.85, 0.1)
-        # for i, j in ti.ndrange(mem.shape[0], mem.shape[1]):
-        #     mem[i, j, self.world.indices['capital']] += 0.1
+    def apply_ti_physics(self, mem: ti.types.ndarray(), ti_inds: ti.template()):
+        for i, j in ti.ndrange(mem.shape[0], mem.shape[1]):
+            cap_per_muscle = mem[i,j, ti_inds.capital]/ti_inds.muscles.n
+            for mid in ti.static(range(ti_inds.muscles.n)):
+                muscle = mem[i, j, ti_inds.muscles[mid]]
+                delta = mem[i, j, ti_inds.growth_acts[mid]]
+                delta_cap, new_rad = physics.grow_muscle_csa_ti(cap_per_muscle, muscle, delta,
+                                                            GROWTH_EFFICIENCY, CAPITAL_DENSITY)
+                mem[i,j, ti_inds.capital] += delta_cap
+                mem[i,j, ti_inds.muscles[mid]] += new_rad
+
 
     def init_channels(self):
         p, pmap, r = pcg.init_ports_levy(self.shape, self.world.channels['port'].metadata)
@@ -67,11 +74,11 @@ class eincasm:
                     flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
                     port=ti.f32,
                     mine=ti.f32,),
-                'macts': ti.types.struct(
+                'muscle_acts': ti.types.struct(
                     flow=ti.f32,
                     port=ti.f32,
                     mine=ti.f32),
-                'gracts': ti.types.struct(
+                'growth_acts': ti.types.struct(
                     flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
                     port=ti.f32,
                     mine=ti.f32),

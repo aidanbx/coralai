@@ -27,32 +27,26 @@ def regen_ports(ports, period, port_id_map, resources):
 
 
 @ti.func
-def grow_muscle_csa_ti(mem: ti.types.ndarray(),
-                       capital_id: ti.i32, muscle_ids, growth_ids,
-                       capital_density: ti.f32, growth_efficiency: ti.f32,
-                       min_growth: ti.f32):
-    
-    if muscle_ids.shape[0] != growth_ids.shape[0]:
-        raise ValueError("Physics: Muscle and growth activation ids must be the same size")
-    for i,j in ti.ndrange(mem.shape[0], mem.shape[1]):
-        assert mem[i,j,capital_id] >= 0, "Capital cannot be negative (before growth)"
-        for mid in ti.static(range(muscle_ids.shape[0])):
-            if mem[i, j, muscle_ids[mid]] <= min_growth:
-                continue
-            mrad = mem[i, j, muscle_ids[mid]]
-            cap = mem[i, j, capital_id]
-            mgrowth = mem[i, j, growth_ids[mid]]
-            csa_delta = (mrad + mgrowth)**2 - mrad**2
-            if csa_delta < 0:
-                mem[i, j, capital_id] += csa_delta * capital_density * growth_efficiency
-                mem[i, j, muscle_ids[mid]] += ti.math.sqrt(csa_delta)
-            if csa_delta > 0:
-                cap_needed = csa_delta * capital_density
-                if cap_needed > cap:
-                    cap_needed = cap
-                    csa_delta = cap / capital_density
-                mem[i, j, capital_id] -= cap_needed
-                mem[i, j, muscle_ids[mid]] += csa_delta * (mgrowth/mgrowth)
+def grow_muscle_csa_ti(capital:         ti.f32,
+                       muscle_radius:   ti.f32,
+                       radius_delta:    ti.f32,
+                       growth_eff:      ti.f32,
+                       capital_density: ti.f32):
+    ret_delta_cap = 0.0
+    ret_delta_rad = 0.0
+    assert capital >= 0, "Capital cannot be negative (before growth)"
+    csa_delta = (muscle_radius + radius_delta)**2 - muscle_radius**2
+    if csa_delta < 0:
+        ret_delta_cap = csa_delta * capital_density * growth_eff
+        ret_delta_rad = ti.math.sqrt(csa_delta)
+    if csa_delta > 0:
+        cap_needed = csa_delta * capital_density
+        if cap_needed > capital:
+            cap_needed = capital
+            csa_delta = capital / capital_density
+        ret_delta_cap = cap_needed
+        ret_delta_rad = csa_delta * ti.math.sign(radius_delta)
+    return ret_delta_cap, ret_delta_rad
 
 
 def grow_muscle_csa(capital, muscle_radii, radii_deltas, growth_cost):
