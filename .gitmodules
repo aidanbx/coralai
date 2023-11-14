@@ -1,0 +1,3 @@
+[submodule "PyTorch-NEAT"]
+	path = PyTorch-NEAT
+	url = https://github.com/uber-research/PyTorch-NEAT.git
