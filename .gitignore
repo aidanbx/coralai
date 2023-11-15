@@ -17,5 +17,6 @@ include/
 *.sqlite3
 fake_data/
 runs/
+play/
 
 taichi_examples/

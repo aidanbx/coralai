@@ -5,18 +5,18 @@ import torch.nn as nn
 from src_ti.world import World
 from src_ti import physics, pcg
 
-GROWTH_EFFICIENCY = 0.85
-CAPITAL_PER_WORK_GROWTH = 2
-FLOW_COST = 0.2
-CAPITAL_PER_WORK_PORT = 0.5
-CAPITAL_PER_WORK_MINE = 0.5
+GROWTH_EFFICIENCY = 1.0
+CAPITAL_PER_WORK_GROWTH = 10
+FLOW_COST = 0.01
+CAPITAL_PER_WORK_PORT = 0.01
+CAPITAL_PER_WORK_MINE = 0.01
 LATENT_SIZE = 20
 # MIN_GROWTH = 0.1
 
 @ti.data_oriented
 class eincasm:
     def __init__(self, shape=None, torch_device=torch.device('mps:0'),
-                 num_com=5, flow_kernel=None):
+                 num_com=16, flow_kernel=None):
         if shape is None:
             shape = (100,100)
         self.shape = shape
@@ -100,7 +100,7 @@ class eincasm:
 
     def apply_physics(self):
         physics.activate_flow_muscles(self.world, self.flow_kernel, FLOW_COST)
-        self.apply_ti_physics(self.world.mem, self.world.ti_inds)
+        self.apply_ti_physics(self.world.mem, self.world.ti_indices)
 
     @ti.kernel
     def apply_ti_physics(self, mem: ti.types.ndarray(), ti_inds: ti.template()):
@@ -160,8 +160,8 @@ class eincasm:
     def define_weights(self):
         self.sensors = ['capital', 'obstacle', 'com']
         self.actuators = ['muscle_acts', 'growth_acts', 'com']
-        self.sensor_ids = self.world.indices[self.sensors]
-        self.actuator_ids = self.world.indices[self.actuators]
+        self.sensor_ids = self.world.windex_obj[self.sensors]
+        self.actuator_ids = self.world.windex_obj[self.actuators]
         self.n_sensors = self.sensor_ids.shape[0]
         self.n_actuators = self.actuator_ids.shape[0]
         self.sense_weights = torch.randn(self.n_sensors, LATENT_SIZE, 3, 3)
@@ -199,4 +199,9 @@ class eincasm:
                     flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
                     port=ti.f32,
                     mine=ti.f32),
-                'com': ti.types.vector(n=self.num_com, dtype=ti.f32)})
+                'com': ti.types.struct(
+                    r=ti.f32,
+                    g=ti.f32,
+                    b=ti.f32,
+                    rest=ti.types.vector(n=self.num_com-3, dtype=ti.f32))
+                })

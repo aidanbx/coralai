@@ -2,25 +2,50 @@ import numpy as np
 import taichi as ti
 import torch
 from src_ti.eincasm import eincasm
-from src_ti.visualize import PixelVis
+from src_ti.PixelVis import PixelVis
+from src_ti.Vis import Vis
 import src_ti.physics as physics
 
 ti.init(ti.gpu)      
 
-ein = eincasm(shape=(50,50), torch_device=torch.device('mps'))
-                 
-def update_world():
-    ein.apply_physics()
-    ein.apply_weights()
+ein = eincasm(shape=(400,400), torch_device=torch.device('mps'))
 
-vis = PixelVis(ein,{
-    'capital': 'viridis',
-    'waste': 'hot',
-    'port': 'copper',
-    'obstacle': 'gray'
-}, update_world)
+w = ein.world
 
-vis.launch()
+vis = Vis(ein, [('com', 'r'), ('com', 'g'), ('com', 'b')])
+
+while vis.window.running:
+    if not vis.drawing:
+        ein.apply_physics()
+        ein.apply_weights()
+    vis.update()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 exit()
 ein = eincasm(shape=(50,50), torch_device=torch.device('mps'))
 
@@ -38,7 +63,7 @@ def test(mem: ti.types.ndarray(), inds: ti.template()):
         for mid in ti.static(range(inds.muscles.shape[0])):
             mem[i,j, inds.port] = process_cell(mem[i,j, inds.capital], mem[i,j, inds.waste])
 
-test(ein.world.mem, ein.world.ti_inds)
+test(ein.world.mem, ein.world.ti_indices)
 exit()
 
 mem = [[1,2,3,4,5,6,7,8,9],
@@ -91,8 +116,8 @@ exit()
 
 ein = eincasm(shape=(50,50), torch_device=torch.device('mps'))
 ein.world['capital'] = torch.ones_like(ein.world['capital'])
-ein.world.indices.return_ti(True)
-ids = ein.world.indices
+ein.world.windex_obj.return_ti(True)
+ids = ein.world.windex_obj
 
 @ti.func
 def tfunc(capital: ti.f32, muscle: ti.f32, growth_act: ti.f32):
@@ -124,7 +149,7 @@ def test(mem: ti.types.ndarray()):
 
 @ti.kernel
 def test(mem: ti.types.ndarray()):
-    tfunc(mem, ein.world.indices['capital'], ein.world.indices['muscles'])
+    tfunc(mem, ein.world.windex_obj['capital'], ein.world.windex_obj['muscles'])
 
 test(ein.world.mem)
 print(ein.world['muscles'])
@@ -143,6 +168,6 @@ vis = PixelVis(ein.world, {
 }, update_world)
 
 print(ein.world['capital'].shape)
-print(vis.ch_lims)
+print(vis.chlims)
 vis.launch()
 print(ein.world['obstacle'].min(), ein.world['obstacle'].max())

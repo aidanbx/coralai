@@ -4,11 +4,24 @@ import taichi as ti
 from timeit import Timer
 
 VISUALIZE = True
+"""
+TODO:
+- Perception kernel of offsets
+- Multi neighborhood? - concentric circles?
+- Custom activation functions
+    - Lookup table of functions
+    - Coefficient and a bias
+    - (x1*f1(x) + b1) + (k2*f2(x) + b2) + (x3*f3(x) + b3) + ... + (xN*fN(x) + bN)
+    .... Is this a NN for a neuron?
+    - Man just use NEAT
+    
 
+"""
 # arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=ti.metal)
-w, h = 400, 400
+w, h = 200, 200
 n_ch = 6
+kernel_radius = 8
 n_im = n_ch//3  # 3 channels per image, nim images next to each other widthwise
 cell_size = 2
 img_w, img_h = w * cell_size * n_im, h * cell_size
@@ -54,18 +67,27 @@ def draw_rad_zero(
 def conv2d(state: ti.types.ndarray(ndim=3), weights: ti.types.ndarray(ndim=4), out: ti.types.ndarray(ndim=3)):
     for o_chid, i, j in ti.ndrange(n_ch, w, h):
         o_chsum = 0.0
-        for in_chid, offi, offj in ti.ndrange(n_ch, (-1, 2), (-1, 2)):
+        for in_chid, offi, offj in ti.ndrange(n_ch, (-kernel_radius, kernel_radius+1), (-kernel_radius, kernel_radius+1)):
             ci = (i + offi) % w
             cj = (j + offj) % h
-            o_chsum += weights[in_chid, o_chid, offi, offj] * state[in_chid, ci, cj]
+            # Calculate the distance from the center
+            dist = ti.sqrt(offi**2 + offj**2)
+            # Adjust the weights based on the distance
+            adjusted_weight = weights[in_chid, o_chid, offi, offj] / (dist + 1)  # Adding 1 to avoid division by zero
+            o_chsum += adjusted_weight * state[in_chid, ci, cj]
         out[o_chid, i, j] = o_chsum
+
+@ti.kernel
+def special_activation(state: ti.types.ndarray()):
+    for I in ti.grouped(state):
+        state[I] = ti.exp(state[I]) + 1.0
 
 @ti.data_oriented
 class NCA(nn.Module):
     def __init__(self, channel_count, visualize = True):
         super(NCA, self).__init__()
         self.state = torch.zeros(channel_count, w, h)
-        self.weights = torch.randn(channel_count, channel_count, 3, 3)
+        self.weights = torch.randn(channel_count, channel_count, kernel_radius*2+1, kernel_radius*2+1)
         self.convout = torch.zeros(channel_count, w, h)
         self.conv = nn.Conv2d(
             channel_count,
@@ -96,12 +118,15 @@ class NCA(nn.Module):
         # Subtract the mean and divide by the standard deviation in place.
         input_tensor.sub_(mean).div_(torch.sqrt(var + 1e-5))
 
+
+
     def forward(self, x):
         conv2d(x, self.weights, self.convout)
         x=self.convout
         # x = self.conv(x.unsqueeze(0))
         # x = self.convout.unsqueeze(0)
         x = nn.ReLU()(x)
+        special_activation(x)
         self.ch_norm_(x)
         # x = (x - x.mean()) / x.std()
         # x = nn.BatchNorm2d(x.shape[1])(x)
@@ -151,7 +176,7 @@ class NCA(nn.Module):
         
 def main_vis(img_w, img_h, num_ch):
     model = NCA(num_ch, visualize=True)
-    window = ti.ui.Window("NCA", (img_w, img_h), fps_limit=50, vsync=True)
+    window = ti.ui.Window("NCA", (img_w, img_h), fps_limit=400, vsync=True)
     canvas = window.get_canvas()
     gui = window.get_gui()
     steps_per_frame = 1
