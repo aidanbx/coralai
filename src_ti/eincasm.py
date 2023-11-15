@@ -10,7 +10,7 @@ CAPITAL_PER_WORK_GROWTH = 10
 FLOW_COST = 0.01
 CAPITAL_PER_WORK_PORT = 0.01
 CAPITAL_PER_WORK_MINE = 0.01
-LATENT_SIZE = 20
+LATENT_SIZE = 16
 # MIN_GROWTH = 0.1
 
 @ti.data_oriented
@@ -50,48 +50,51 @@ class eincasm:
     def sigmoid(self, x):
         return 1 / (1 + ti.exp(-x))
 
-    @ti.kernel
-    def think(self,
-              mem: ti.types.ndarray(),
-              sensor_ids: ti.types.ndarray(),
-              sense_weights: ti.types.ndarray(),
-              convout: ti.types.ndarray()):
-        for o_chid, i, j in ti.ndrange(sensor_ids.shape[0], self.w, self.h):
-            o_chsum = 0.0
-            for in_chid, offi, offj in ti.ndrange(sensor_ids.shape[0], (-1, 2), (-1, 2)):
-                ci = (i + offi) % self.w
-                cj = (j + offj) % self.h
-                adjusted_weight = sense_weights[in_chid, o_chid, offi, offj]
-                o_chsum += adjusted_weight * mem[ci, cj, in_chid]
-            convout[i, j, o_chid] = o_chsum
-
     # @ti.kernel
     # def think(self,
     #           mem: ti.types.ndarray(),
     #           sensor_ids: ti.types.ndarray(),
-    #           actuator_ids: ti.types.ndarray(),
     #           sense_weights: ti.types.ndarray(),
-    #           latent_layer: ti.types.ndarray(),
-    #           act_weights: ti.types.ndarray()):
-    #     for lat_idx, i, j in ti.ndrange(LATENT_SIZE, self.shape[0], self.shape[1]):
-    #         lat_sum = 0.0
-    #         for sense_chidx, offi, offj in ti.ndrange(self.n_sensors, (-1, 2), (-1, 2)):
-    #             ci = (i + offi) % self.shape[0]
-    #             cj = (j + offj) % self.shape[1]
-    #             lat_sum += sense_weights[sense_chidx, lat_idx, offi, offj] * mem[ci, cj, sensor_ids[sense_chidx]]
-    #         latent_layer[lat_idx, i, j] = self.ReLU(lat_sum)
-            
-    #     for act_idx, i, j in ti.ndrange(self.n_actuators, self.shape[0], self.shape[1]):
-    #         act_sum = 0.0
-    #         for lat_idx in ti.static(range(LATENT_SIZE)):
-    #             act_sum = act_weights[lat_idx, act_idx] * latent_layer[lat_idx, i, j]
+    #           convout: ti.types.ndarray()):
+    #     for o_chid, i, j in ti.ndrange(sensor_ids.shape[0], self.w, self.h):
+    #         o_chsum = 0.0
+    #         for in_chid, offi, offj in ti.ndrange(sensor_ids.shape[0], (-1, 2), (-1, 2)):
+    #             ci = (i + offi) % self.w
+    #             cj = (j + offj) % self.h
+    #             adjusted_weight = sense_weights[in_chid, o_chid, offi, offj]
+    #             o_chsum += adjusted_weight * mem[ci, cj, in_chid]
+    #         convout[i, j, o_chid] = o_chsum
+    @ti.kernel
+    def sense(self,
+              mem: ti.types.ndarray(),
+              sensor_inds: ti.types.ndarray(),
+              sense_weights: ti.types.ndarray(),
+              latent_layer: ti.types.ndarray()):
+        for lat_idx, i, j in ti.ndrange(LATENT_SIZE, self.shape[0], self.shape[1]):
+            lat_sum = 0.0
+            for sense_chidx, offi, offj in ti.ndrange(self.n_sensors, (-1, 2), (-1, 2)):
+                ci = (i + offi) % self.shape[0]
+                cj = (j + offj) % self.shape[1]
+                lat_sum += sense_weights[sense_chidx, lat_idx, offi, offj] * mem[ci, cj, sensor_inds[sense_chidx]]
+            latent_layer[lat_idx, i, j] = self.ReLU(lat_sum)
 
-    #         # TODO: APPLY FINAL ACTIVATION BASED ON LIMITS
-    #         mem[i, j, actuator_ids[act_idx]] = self.sigmoid(act_sum)
+    @ti.kernel
+    def act(self,
+            mem: ti.types.ndarray(),
+            actuator_inds: ti.types.ndarray(),
+            latent_layer: ti.types.ndarray(),
+            act_weights: ti.types.ndarray()):
+        for act_idx, i, j in ti.ndrange(self.n_actuators, self.shape[0], self.shape[1]):
+            act_sum = 0.0
+            for lat_idx in ti.static(range(LATENT_SIZE)):
+                act_sum = act_weights[lat_idx, act_idx] * latent_layer[lat_idx, i, j]
+
+            # TODO: APPLY FINAL ACTIVATION BASED ON LIMITS
+            mem[i, j, actuator_inds[act_idx]] = act_sum
 
     def perturb_weights(self):
         self.sense_weights += torch.randn_like(self.sense_weights) * self.perturb_strength
-        # self.act_weights += torch.randn_like(self.act_weights) * self.perturb_strength
+        self.act_weights += torch.randn_like(self.act_weights) * self.perturb_strength
 
     def ch_norm_(self, input_tensor):
         # The input tensor shape is assumed to be (width, height, num_channels).
@@ -104,24 +107,45 @@ class eincasm:
         input_tensor.sub_(mean).div_(torch.sqrt(var + 1e-5))
     
     def apply_weights(self):
-        self.think(self.world.mem,
-                    self.sensor_ids,
-                    self.sense_weights,
-                    self.convout)
-        x = torch.sigmoid(self.convout)
+        # self.think(self.world.mem,
+        #     self.sensor_inds,
+        #     self.actuator_inds,
+        #     self.sense_weights,
+        #     self.latent_layer,
+        #     self.act_weights)
+        # x = self.world[self.actuators]
+        # x = torch.sigmoid(x)
+        # x = nn.ReLU()(x)
+        # self.ch_norm_(x)
+        # x = torch.sigmoid(x)
+        # self.world[self.actuators] = x
+    
+        self.sense(
+            self.world.mem,
+            self.sensor_inds,
+            self.sense_weights,
+            self.latent_layer)
+        
+        # x = self.latent_layer
+        # x = torch.sigmoid(x)
+        # x = nn.ReLU()(x)
+        # self.ch_norm_(x)
+        # x = torch.sigmoid(x)
+        # self.latent_layer = x
+
+        self.act(
+            self.world.mem,
+            self.actuator_inds,
+            self.latent_layer,
+            self.act_weights)
+        
+        x = self.world[self.actuators]
+        x = torch.sigmoid(x)
         x = nn.ReLU()(x)
         self.ch_norm_(x)
         x = torch.sigmoid(x)
-        self.world.mem = x
-        # self.think(self.world.mem,
-        #             self.sensor_ids,
-        #             self.actuator_ids,
-        #             self.sense_weights,
-        #             self.latent_layer,
-        #             self.act_weights)
-        # self.world.stat('capital')
-        # self.world.stat(self.actuators)
-        # self.world.stat('com')
+        self.world[self.actuators] = x
+
 
     def apply_physics(self):
         physics.activate_flow_muscles(self.world, self.flow_kernel, FLOW_COST)
@@ -186,15 +210,15 @@ class eincasm:
     def define_weights(self):
         self.sensors = [('com', 'r'), ('com', 'g'), ('com', 'b')]
         self.actuators = [('com', 'r'), ('com', 'g'), ('com', 'b')]
-        self.sensor_ids = self.world.windex_obj[self.sensors]
-        self.actuator_ids = self.world.windex_obj[self.actuators]
-        self.n_sensors = self.sensor_ids.shape[0]
-        self.n_actuators = self.actuator_ids.shape[0]
-        self.sense_weights = torch.randn(self.n_sensors, LATENT_SIZE, 3, 3)
-        self.convout = torch.zeros(self.shape[0], self.shape[1], self.n_sensors)
+        self.sensor_inds = self.world.windex_obj[self.sensors]
+        self.actuator_inds = self.world.windex_obj[self.actuators]
+        self.n_sensors = self.sensor_inds.shape[0]
+        self.n_actuators = self.actuator_inds.shape[0]
         # self.sense_weights = torch.randn(self.n_sensors, LATENT_SIZE, 3, 3)
-        # self.latent_layer = torch.zeros(LATENT_SIZE, self.shape[0], self.shape[1])
-        # self.act_weights = torch.randn(LATENT_SIZE, self.n_actuators)
+        # self.convout = torch.zeros(self.shape[0], self.shape[1], self.n_sensors)
+        self.sense_weights = torch.randn(self.n_sensors, LATENT_SIZE, 3, 3)
+        self.latent_layer = torch.zeros(LATENT_SIZE, self.shape[0], self.shape[1])
+        self.act_weights = torch.randn(LATENT_SIZE, self.n_actuators)
 
     def world_def(self):
         return World(
