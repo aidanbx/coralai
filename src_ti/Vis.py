@@ -36,7 +36,7 @@ class Vis:
         self.prev_time = time.time()
 
         builder = TaichiStructFactory()
-        builder.add_ti('scale', scale)
+        builder.add_ti_i('scale', scale)
         self.vars = self.build_dynamic_params(builder)
 
     def build_dynamic_params(self, builder: TaichiStructFactory):
@@ -44,19 +44,23 @@ class Vis:
         This is to clean up parameters that change during the simulation and thus
         have to be passed to taichi kernels
         """
-        builder.add_ti('chlims', self.world.get_lims_tivec(self.chids))
-        builder.add_ti('brush_radius', 4)
-        builder.add_ti('chnum_to_paint', 0)
-        builder.add_ti('chindex_to_paint', self.chindices[0])
-        builder.add_ti('val_to_paint', 1.5)
-        builder.add_ti('drawing', False)
-        builder.add_ti('mouse_posx', 0.0)
-        builder.add_ti('mouse_posy', 0.0)
-        builder.add_ti('perturb_strength', 0.1)
-        builder.add_ti('is_perturbing', False)
+        builder.add_timat_f('chlims', self.world.get_lims_timat(self.chids))
+        builder.add_tivec_i('chindices', self.chindices)
+        builder.add_ti_i('brush_radius', 4)
+        builder.add_ti_i('chnum_to_paint', 0)
+        builder.add_ti_i('chindex_to_paint', self.chindices[0])
+        builder.add_ti_f('val_to_paint', 1.5)
+        builder.add_ti_f('val_to_paint_dt', -1) 
+        builder.add_ti_i('drawing', False)
+        builder.add_ti_f('mouse_posx', 0.0)
+        builder.add_ti_f('mouse_posy', 0.0)
+        builder.add_ti_f('perturb_strength', 0.1)
+        builder.add_ti_i('is_perturbing', False)
+        builder.add_ti_f('test', -1)
         return builder.build()
 
     def update(self):
+        v = self.vars[None]
         self.check_events(self.vars)
         self.render_opt_window(self.vars)
 
@@ -64,44 +68,51 @@ class Vis:
         dt = current_time - self.prev_time
         self.prev_time = current_time
         pos = self.window.get_cursor_pos()
-        vtp = self.val_to_paint * dt * 5
-        if self.is_perturbing:
+        v.mouse_posx = pos[0]
+        v.mouse_posy = pos[1]
+        v.val_to_paint_dt = v.val_to_paint * dt * 5
+        if v.is_perturbing:
             self.eincasm.perturb_weights()
-
         self.update_vis(self.world.mem, self.vars)
         self.canvas.set_background_color((1, 1, 1))
         self.canvas.set_image(self.image)
         self.window.show() 
+        self.vars[None] = v
 
     @ti.kernel
     def update_vis(self, mem: ti.types.ndarray(), vars: ti.template()):
-        if vars.drawing:
+        v=vars[None]   
+        if v.drawing:
             self.paint_cursor_value(mem, vars)
-        self.write_to_image(mem)
-
+        self.write_to_image(mem, vars)
+        vars[None] = v
 
     @ti.func
     def write_to_image(self, mem: ti.types.ndarray(), vars: ti.template()):
+        v=vars[None]
         for i, j in self.image:
-            xind = i//vars.scale 
-            yind = j//vars.scale
+            xind = i//v.scale 
+            yind = j//v.scale
             for chnum in ti.static(range(3)):
-                self.image[i, j][chnum] = mem[xind, yind, self.chindices[chnum]]
+                self.image[i, j][chnum] = mem[xind, yind, v.chindices[chnum]]
+        vars[None] = v
 
     @ti.func
     def paint_cursor_value(self, mem: ti.types.ndarray(), vars: ti.template()):
         """
         Use cursor position to paint selected value of selected channel - take into account pixel sizes
         """
-        ind_x = int(vars.mouse_posx * mem.shape[0])
-        ind_y = int(vars.mouse_posy * mem.shape[1])
-        for i, j in ti.ndrange((-vars.brush_radius, vars.brush_radius), (-vars.brush_radius, vars.brush_radius)):
-            if (i**2) + j**2 < vars.brush_radius**2:
+        v=vars[None]
+        ind_x = int(v.mouse_posx * mem.shape[0])
+        ind_y = int(v.mouse_posy * mem.shape[1])
+        for i, j in ti.ndrange((-v.brush_radius, v.brush_radius), (-v.brush_radius, v.brush_radius)):
+            if (i**2) + j**2 < v.brush_radius**2:
                 ix = (i + ind_x) % mem.shape[0]
                 jy = (j + ind_y) % mem.shape[1]
-                mem[ix, jy, vars.chindex_to_paint] = ti.math.clamp(
-                    mem[ix, jy, vars.chindex_to_paint] + vars.val_to_paint,
-                    self.chlims[vars.chnum_to_paint, 0], self.chlims[vars.chnum_to_paint, 1])
+                mem[ix, jy, v.chindex_to_paint] += ti.math.clamp(
+                    mem[ix, jy, v.chindex_to_paint] + v.val_to_paint_dt, 
+                    v.chlims[v.chnum_to_paint, 0], v.chlims[v.chnum_to_paint, 1])
+        vars[None] = v
     
     def render_opt_window(self, vars):
         """
@@ -109,35 +120,41 @@ class Vis:
         Paint channel and value
         Any sliders for world metadata desired
         """
+        v=vars[None]
         opt_w = min(480 / self.img_w, self.img_w)
         opt_h = min(180 / self.img_h, self.img_h)
         with self.gui.sub_window("Options", 0.05, 0.05, opt_w, opt_h) as w:
-            vars.brush_radius = w.slider_int("Brush Radius", vars.brush_radius, 1, 20)
-            vars.chnum_to_paint = w.slider_int("Channel to Paint", vars.chnum_to_paint, 0, 2)
-            vars.val_to_paint = w.slider_float("Paint delta", vars.val_to_paint, -2, 2)
-            vars.perturb_strength = w.slider_float("Perturb Strength", vars.perturb_strength, 0.0, 5.0)
-            self.eincasm.perturb_strength = vars.perturb_strength
-            vars.chindex_to_paint = vars.chindices[vars.chnum_to_paint]
-            w.text(f"Painting: {self.chids[vars.chnum_to_paint]}")
+            v.brush_radius = w.slider_int("Brush Radius", v.brush_radius, 1, 20)
+            v.chnum_to_paint = w.slider_int("Channel to Paint", v.chnum_to_paint, 0, 2)
+            v.val_to_paint = w.slider_float("Paint delta", v.val_to_paint, -2, 2)
+            v.perturb_strength = w.slider_float("Perturb Strength", v.perturb_strength, 0.0, 5.0)
+            v.is_perturbing = w.checkbox("Perturb Weights", v.is_perturbing)
+
+            self.eincasm.perturb_strength = v.perturb_strength
+            v.chindex_to_paint = v.chindices[v.chnum_to_paint]
+            w.text(f"Painting: {self.chids[v.chnum_to_paint]}")
+        vars[None] = v
 
     def check_events(self, vars):
         """
         Keys for pause and reset
         Cursor motion for painting
         """
+        v=vars[None]
         for e in self.window.get_events(ti.ui.PRESS):
             if e.key in [ti.ui.ESCAPE]:
                 self.window.running = False
             if e.key == 'p':
-                vars.is_perturbing = True
+                v.is_perturbing = True
         
         if self.window.is_pressed(ti.ui.LMB) and self.window.is_pressed(ti.ui.SPACE):
-            vars.drawing = True
+            v.drawing = True
         else:
-            vars.drawing = False
+            v.drawing = False
 
         for e in self.window.get_events(ti.ui.RELEASE):
             if e.key == ti.ui.LMB:
-                vars.drawing = False
+                v.drawing = False
             if e.key == 'p':
-                vars.is_perturbing = False
+                v.is_perturbing = False
+        vars[None] = v

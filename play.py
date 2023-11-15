@@ -7,13 +7,17 @@ from src_ti.Vis import Vis
 import src_ti.physics as physics
 from src_ti.TaichiStructFactory import TaichiStructFactory
 
-
 ti.init(ti.gpu)
-mystruct = ti.types.struct(**{
-    "f1": ti.types.vector(n=2, dtype=ti.f32),
-    "i1": ti.types.vector(n=2, dtype=ti.i32),
-})
 
-myfield = mystruct.field(shape=())
-myfield[None]['f1'] = [1.0, 2.0]
-myfield[None]['i1'] = [1, 2]
+builder = TaichiStructFactory()
+builder.add_ti_i('test', 2)
+vars = builder.build()
+
+@ti.kernel
+def test(vars: ti.template()):
+    v=vars[None]
+    v.test = 123123123
+    vars[None] = v
+
+test(vars)
+print(vars[None].test)

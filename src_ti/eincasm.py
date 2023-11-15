@@ -20,6 +20,8 @@ class eincasm:
         if shape is None:
             shape = (100,100)
         self.shape = shape
+        self.w = shape[0]
+        self.h = shape[1]
         self.torch_device = torch_device
         
         if flow_kernel is None:
@@ -52,29 +54,44 @@ class eincasm:
     def think(self,
               mem: ti.types.ndarray(),
               sensor_ids: ti.types.ndarray(),
-              actuator_ids: ti.types.ndarray(),
               sense_weights: ti.types.ndarray(),
-              latent_layer: ti.types.ndarray(),
-              act_weights: ti.types.ndarray()):
-        for lat_idx, i, j in ti.ndrange(LATENT_SIZE, self.shape[0], self.shape[1]):
-            lat_sum = 0.0
-            for sense_chidx, offi, offj in ti.ndrange(self.n_sensors, (-1, 2), (-1, 2)):
-                ci = (i + offi) % self.shape[0]
-                cj = (j + offj) % self.shape[1]
-                lat_sum += sense_weights[sense_chidx, lat_idx, offi, offj] * mem[ci, cj, sensor_ids[sense_chidx]]
-            latent_layer[lat_idx, i, j] = self.ReLU(lat_sum)
-            
-        for act_idx, i, j in ti.ndrange(self.n_actuators, self.shape[0], self.shape[1]):
-            act_sum = 0.0
-            for lat_idx in ti.static(range(LATENT_SIZE)):
-                act_sum = act_weights[lat_idx, act_idx] * latent_layer[lat_idx, i, j]
+              convout: ti.types.ndarray()):
+        for o_chid, i, j in ti.ndrange(sensor_ids.shape[0], self.w, self.h):
+            o_chsum = 0.0
+            for in_chid, offi, offj in ti.ndrange(sensor_ids.shape[0], (-1, 2), (-1, 2)):
+                ci = (i + offi) % self.w
+                cj = (j + offj) % self.h
+                adjusted_weight = sense_weights[in_chid, o_chid, offi, offj]
+                o_chsum += adjusted_weight * mem[ci, cj, in_chid]
+            convout[i, j, o_chid] = o_chsum
 
-            # TODO: APPLY FINAL ACTIVATION BASED ON LIMITS
-            mem[i, j, actuator_ids[act_idx]] = self.sigmoid(act_sum)
+    # @ti.kernel
+    # def think(self,
+    #           mem: ti.types.ndarray(),
+    #           sensor_ids: ti.types.ndarray(),
+    #           actuator_ids: ti.types.ndarray(),
+    #           sense_weights: ti.types.ndarray(),
+    #           latent_layer: ti.types.ndarray(),
+    #           act_weights: ti.types.ndarray()):
+    #     for lat_idx, i, j in ti.ndrange(LATENT_SIZE, self.shape[0], self.shape[1]):
+    #         lat_sum = 0.0
+    #         for sense_chidx, offi, offj in ti.ndrange(self.n_sensors, (-1, 2), (-1, 2)):
+    #             ci = (i + offi) % self.shape[0]
+    #             cj = (j + offj) % self.shape[1]
+    #             lat_sum += sense_weights[sense_chidx, lat_idx, offi, offj] * mem[ci, cj, sensor_ids[sense_chidx]]
+    #         latent_layer[lat_idx, i, j] = self.ReLU(lat_sum)
+            
+    #     for act_idx, i, j in ti.ndrange(self.n_actuators, self.shape[0], self.shape[1]):
+    #         act_sum = 0.0
+    #         for lat_idx in ti.static(range(LATENT_SIZE)):
+    #             act_sum = act_weights[lat_idx, act_idx] * latent_layer[lat_idx, i, j]
+
+    #         # TODO: APPLY FINAL ACTIVATION BASED ON LIMITS
+    #         mem[i, j, actuator_ids[act_idx]] = self.sigmoid(act_sum)
 
     def perturb_weights(self):
         self.sense_weights += torch.randn_like(self.sense_weights) * self.perturb_strength
-        self.act_weights += torch.randn_like(self.act_weights) * self.perturb_strength
+        # self.act_weights += torch.randn_like(self.act_weights) * self.perturb_strength
 
     def ch_norm_(self, input_tensor):
         # The input tensor shape is assumed to be (width, height, num_channels).
@@ -89,11 +106,19 @@ class eincasm:
     def apply_weights(self):
         self.think(self.world.mem,
                     self.sensor_ids,
-                    self.actuator_ids,
                     self.sense_weights,
-                    self.latent_layer,
-                    self.act_weights)
-        self.ch_norm_(self.world[self.actuators])
+                    self.convout)
+        x = torch.sigmoid(self.convout)
+        x = nn.ReLU()(x)
+        self.ch_norm_(x)
+        x = torch.sigmoid(x)
+        self.world.mem = x
+        # self.think(self.world.mem,
+        #             self.sensor_ids,
+        #             self.actuator_ids,
+        #             self.sense_weights,
+        #             self.latent_layer,
+        #             self.act_weights)
         # self.world.stat('capital')
         # self.world.stat(self.actuators)
         # self.world.stat('com')
@@ -153,20 +178,23 @@ class eincasm:
             mem[i,j, ti_inds.waste] += delta_waste
 
     def init_channels(self):
-        p, pmap, r = pcg.init_ports_levy(self.shape, self.world.channels['port'].metadata)
-        self.world['port'], self.world['portmap'], self.resources = p, pmap, r
-        self.world['obstacle'] = pcg.init_obstacles_perlin(self.shape, self.world.channels['obstacle'].metadata)
+        pass
+        # p, pmap, r = pcg.init_ports_levy(self.shape, self.world.channels['port'].metadata)
+        # self.world['port'], self.world['portmap'], self.resources = p, pmap, r
+        # self.world['obstacle'] = pcg.init_obstacles_perlin(self.shape, self.world.channels['obstacle'].metadata)
 
     def define_weights(self):
-        self.sensors = ['capital', 'obstacle', 'com']
-        self.actuators = ['muscle_acts', 'growth_acts', 'com']
+        self.sensors = [('com', 'r'), ('com', 'g'), ('com', 'b')]
+        self.actuators = [('com', 'r'), ('com', 'g'), ('com', 'b')]
         self.sensor_ids = self.world.windex_obj[self.sensors]
         self.actuator_ids = self.world.windex_obj[self.actuators]
         self.n_sensors = self.sensor_ids.shape[0]
         self.n_actuators = self.actuator_ids.shape[0]
         self.sense_weights = torch.randn(self.n_sensors, LATENT_SIZE, 3, 3)
-        self.latent_layer = torch.zeros(LATENT_SIZE, self.shape[0], self.shape[1])
-        self.act_weights = torch.randn(LATENT_SIZE, self.n_actuators)
+        self.convout = torch.zeros(self.shape[0], self.shape[1], self.n_sensors)
+        # self.sense_weights = torch.randn(self.n_sensors, LATENT_SIZE, 3, 3)
+        # self.latent_layer = torch.zeros(LATENT_SIZE, self.shape[0], self.shape[1])
+        # self.act_weights = torch.randn(LATENT_SIZE, self.n_actuators)
 
     def world_def(self):
         return World(
@@ -174,34 +202,34 @@ class eincasm:
             torch_dtype=torch.float32,
             torch_device=self.torch_device,
             channels = {
-                'capital':  {'lims': [0,10]},
-                'waste':    {'lims': [0,1]},
-                'obstacle': {'lims': [0,1]},
-                'port': {
-                    'lims': [-1,10],
-                    'metadata': {
-                        'num_resources': 2,
-                        'min_regen_amp': 0.5,
-                        'max_regen_amp': 2,
-                        'alpha_range': [0.4, 0.9],
-                        'beta_range': [0.8, 1.2],
-                        'num_sites_range': [2, 10]},},
-                'portmap': ti.i8,
-                'muscles': ti.types.struct(
-                    flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
-                    port=ti.f32,
-                    mine=ti.f32,),
-                'muscle_acts': ti.types.struct(
-                    flow=ti.f32,
-                    port=ti.f32,
-                    mine=ti.f32),
-                'growth_acts': ti.types.struct(
-                    flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
-                    port=ti.f32,
-                    mine=ti.f32),
+                # 'capital':  {'lims': [0,10]},
+                # 'waste':    {'lims': [0,1]},
+                # 'obstacle': {'lims': [0,1]},
+                # 'port': {
+                #     'lims': [-1,10],
+                #     'metadata': {
+                #         'num_resources': 2,
+                #         'min_regen_amp': 0.5,
+                #         'max_regen_amp': 2,
+                #         'alpha_range': [0.4, 0.9],
+                #         'beta_range': [0.8, 1.2],
+                #         'num_sites_range': [2, 10]},},
+                # 'portmap': ti.i8,
+                # 'muscles': ti.types.struct(
+                #     flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
+                #     port=ti.f32,
+                #     mine=ti.f32,),
+                # 'muscle_acts': ti.types.struct(
+                #     flow=ti.f32,
+                #     port=ti.f32,
+                #     mine=ti.f32),
+                # 'growth_acts': ti.types.struct(
+                #     flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
+                #     port=ti.f32,
+                #     mine=ti.f32),
                 'com': ti.types.struct(
                     r=ti.f32,
                     g=ti.f32,
-                    b=ti.f32,
-                    rest=ti.types.vector(n=self.num_com-3, dtype=ti.f32))
+                    b=ti.f32)
+                    # rest=ti.types.vector(n=self.num_com-3, dtype=ti.f32))
                 })

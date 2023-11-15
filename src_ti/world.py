@@ -70,19 +70,6 @@ class World:
         self.ti_indices = -1
         self.ti_lims = -1
 
-
-    # def _get_ti_chlims(self):
-    #     lims_type = ti.types.struct(**{chid: ti.types.vector(n=2, dtype=ti.f32) for chid in self.channels.keys()})
-
-    #     for i, ch in enumerate(self.chids):
-    #         if isinstance(ch, tuple):
-    #             ch_lims[i] = self.world.channels[ch[0]].lims
-    #         else:
-    #             ch_lims[i] = self.world.channels[ch].lims
-    #     ch_lims_field = ti.field(dtype=ti.f32, shape=(4,2))
-    #     ch_lims_field.from_numpy(ch_lims)
-    #     return ch_lims_field
-
     def add_channel(self, id: str, ti_dtype=ti.f32, **kwargs):
         if self.mem is not None:
             raise ValueError(f"World: When adding channel {id}: Cannot add channel after world memory is allocated (yet).")
@@ -215,11 +202,12 @@ class World:
                 raise ValueError(f"World: Cannot set channel {key} to value of shape {value.shape}. Expected shape: {self.shape[:2]}")
             self.mem[:, :, indices[0]].copy_(value)
 
-    # def get_inds_tivec(self, key):
-    #     indices = self.windex_obj[key]
-    #     return ti.types.vector(indices)
+    def get_inds_tivec(self, key):
+        indices = self.windex_obj[key]
+        itype = ti.types.vector(n=len(indices), dtype=ti.i32)
+        return itype(indices)
     
-    def get_lims_tivec(self, key):
+    def get_lims_timat(self, key):
         lims = []
         if isinstance(key, str):
             key = [key]
@@ -232,7 +220,9 @@ class World:
                 lims.append(self.channels[k].lims)
         if len(lims) == 1:
             lims = lims[0]
-        return ti.Vector(lims)
+        lims = np.array(lims, dtype=np.float32)
+        ltype = ti.types.matrix(lims.shape[0], lims.shape[1], dtype=ti.f32)
+        return ltype(lims)
 
     def get_channel_indices(self):
         chindices = np.array(self.world.windex_obj[self.chs], dtype=np.int32)

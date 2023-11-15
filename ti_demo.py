@@ -15,8 +15,9 @@ w = ein.world
 vis = Vis(ein, [('com', 'r'), ('com', 'g'), ('com', 'b')])
 
 while vis.window.running:
-    if not vis.drawing:
-        ein.apply_physics()
+    v = vis.vars[None]
+    if not v.drawing:
+        # ein.apply_physics()
         ein.apply_weights()
     vis.update()
 
