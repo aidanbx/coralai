@@ -1,11 +1,11 @@
 import numpy as np
 import taichi as ti
 import torch
-from src_ti.eincasm import eincasm
-from src_ti.PixelVis import PixelVis
-from src_ti.Vis import Vis
-import src_ti.physics as physics
-from src_ti.TaichiStructFactory import TaichiStructFactory
+from eincasm.Eincasm import eincasm
+from eincasm.PixelVis import PixelVis
+from eincasm.Vis import Vis
+import eincasm.sim.physics as physics
+from eincasm.TaichiStructFactory import TaichiStructFactory
 
 ti.init(ti.gpu)
 

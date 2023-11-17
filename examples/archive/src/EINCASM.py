@@ -2,12 +2,11 @@ import random
 from scipy import signal
 import numpy as np
 import torch
-from src import (
+from eincasm import (
     Simulation,
-    physics,
-    pcg,
     Channel
 )
+from eincasm.sim import pcg, physics
 
 # IDS
 MUSCLES = 'all_muscle_radii'

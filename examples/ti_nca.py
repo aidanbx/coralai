@@ -20,8 +20,8 @@ TODO:
 # arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=ti.metal)
 w, h = 200, 200
-n_ch = 6
-kernel_radius = 8
+n_ch = 10
+kernel_radius = 4
 n_im = n_ch//3  # 3 channels per image, nim images next to each other widthwise
 cell_size = 2
 img_w, img_h = w * cell_size * n_im, h * cell_size
@@ -117,8 +117,6 @@ class NCA(nn.Module):
         # The in-place normalization is done next.
         # Subtract the mean and divide by the standard deviation in place.
         input_tensor.sub_(mean).div_(torch.sqrt(var + 1e-5))
-
-
 
     def forward(self, x):
         conv2d(x, self.weights, self.convout)
