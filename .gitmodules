@@ -1,0 +1,6 @@
+[submodule "eincasm/dependencies/PyTorch-NEAT"]
+	path = eincasm/dependencies/PyTorch-NEAT
+	url = https://github.com/uber-research/PyTorch-NEAT.git
+[submodule "eincasm/dependencies/neat-python"]
+	path = eincasm/dependencies/neat-python
+	url = https://github.com/CodeReclaimers/neat-python.git
