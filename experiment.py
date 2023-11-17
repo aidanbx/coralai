@@ -2,8 +2,8 @@ import numpy as np
 import taichi as ti
 import torch
 from eincasm.Eincasm import Experiment
-from eincasm.vis.PixelVis import PixelVis
-from eincasm.vis.Vis import Vis
+from eincasm.analysis.PixelVis import PixelVis
+from eincasm.analysis.Vis import Vis
 
 ti.init(ti.gpu)      
 ein = Eincasm(shape=(100,100), torch_device=torch.device('mps'))
