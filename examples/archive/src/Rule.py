@@ -1,4 +1,4 @@
-from src import utils
+from eincasm import utils
 # from src.Channel import Channel
 import json
 from pprint import pformat
