@@ -2,9 +2,9 @@ import warnings
 import torch
 import taichi as ti
 import numpy as np
-from eincasm.TaichiStructFactory import TaichiStructFactory
-from .Channel import Channel
-from .WorldIndex import WorldIndex
+from ..ti_struct_factory import TaichiStructFactory
+from .channel import Channel
+from .world_index import WorldIndex
 
 
 @ti.data_oriented
@@ -112,6 +112,17 @@ class World:
         return mem, channel_dict
 
 
+    # def nch(self, key):
+    #     return self.windex[key].shape[0]
+
+
+    def add_ti_inds(self, key, inds):
+        if len(inds) == 1:
+            self.ti_ind_builder.add_i(key, inds[0])
+        else:
+            self.ti_ind_builder.add_nparr_int(key, np.array(inds))
+
+
     def _index_subchannels(self, subchdict, start_index, parent_chid):
         end_index = start_index
         subch_tree = {}
@@ -122,7 +133,7 @@ class World:
                 )
             subch_depth = self.check_ch_shape(subch.shape)
             indices = [i for i in range(end_index, end_index + subch_depth)]
-            self.ti_ind_builder.add_nparr_int(parent_chid + "_" + subchid, indices)
+            self.add_ti_inds(parent_chid + "_" + subchid, indices)
             self.ti_lims_builder.add_nparr_float(
                 parent_chid + "_" + subchid, self.channels[parent_chid].lims
             )
@@ -131,10 +142,6 @@ class World:
             }
             end_index += subch_depth
         return subch_tree, end_index - start_index
-
-
-    def nch(self, key):
-        return self.windex[key].shape[0]
 
 
     def malloc(self):
@@ -155,7 +162,7 @@ class World:
                 indices = [
                     i for i in range(endlayer_pointer, endlayer_pointer + ch_depth)
                 ]
-                self.ti_ind_builder.add_nparr_int(chid, indices)
+                self.add_ti_inds(chid, indices)
                 self.ti_lims_builder.add_nparr_float(chid, self.channels[chid].lims)
                 index_tree[chid] = {"indices": indices}
                 endlayer_pointer += ch_depth
@@ -166,7 +173,7 @@ class World:
                 indices = [
                     i for i in range(endlayer_pointer, endlayer_pointer + total_depth)
                 ]
-                self.ti_ind_builder.add_nparr_int(chid, indices)
+                self.add_ti_inds(chid, indices)
                 self.ti_lims_builder.add_nparr_float(chid, self.channels[chid].lims)
                 index_tree[chid] = {
                     "subchannels": subch_tree,

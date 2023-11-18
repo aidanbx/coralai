@@ -1,4 +1,13 @@
+import taichi as ti
+
+@ti.dataclass
 class EinParams:
+    growth_efficiency: ti.f32
+    capital_per_work_growth: ti.f32
+    flow_cost: ti.f32
+    capital_per_work_port: ti.f32
+    capital_per_work_mine: ti.f32
+
     def __init__(self,
                  growth_efficiency=1.0,
                  capital_per_work_growth=10,

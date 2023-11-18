@@ -2,31 +2,31 @@ import numpy as np
 import taichi as ti
 import torch
 
-from .sim.World import World
-from .sim.Organism import Organism
-from .sim import pcg
-from .sim import physics
-from .EinParams import EinParams
+from .substrate.world import World
+from .dynamics.organism_torch import Organism
+from .ein_params import EinParams
+from .dynamics import pcg
+from .dynamics import physics
 
 
 @ti.data_oriented
 class Eincasm:
     def __init__(
         self,
-        params: EinParams,
+        params: EinParams = None,
         shape=None,
-        torch_device=torch.device("mps:0"),
-        num_com=16,
+        torch_device=None,
+        num_com=None,
         flow_kernel=None,
     ):
-        self.params = params
+        if params is None:
+            params = EinParams()
         if shape is None:
             shape = (100, 100)
-        self.shape = shape
-        self.w = shape[0]
-        self.h = shape[1]
-        self.torch_device = torch_device
-
+        if torch_device is None:
+            torch_device = torch.device("cpu")
+        if num_com is None:
+            num_com = 16
         if flow_kernel is None:
             flow_kernel = ti.Vector.field(2, dtype=ti.i32, shape=5)
             flow_kernel[0] = [0, 0]  # ORIGIN
@@ -35,6 +35,11 @@ class Eincasm:
             flow_kernel[3] = [1, 0]  # DOWN
             flow_kernel[4] = [0, -1]  # LEFT
 
+        self.params = params
+        self.shape = shape
+        self.w = shape[0]
+        self.h = shape[1]
+        self.torch_device = torch_device
         self.flow_kernel = flow_kernel
         self.num_com = num_com
         self.world = self.world_def()
@@ -42,8 +47,8 @@ class Eincasm:
         self.init_channels()
         self.timestep = 0
         self.cid, self.mids = 0, np.array([1, 2])
-        self.sensors = ['capital', 'obstacle',('com', 'r'), ('com', 'g'), ('com', 'b'), ('com', 'a')]
-        self.actuators = [('com', 'r'), ('com', 'g'), ('com', 'b'), ('com', 'a')]
+        self.sensors = ['capital', 'obstacle', 'com']
+        self.actuators = ['com', 'muscle_acts', 'growth_acts']
         self.organism = Organism(self.world,
                                  sensors = self.sensors,
                                  actuators = self.actuators)
@@ -56,15 +61,19 @@ class Eincasm:
 
     @ti.kernel
     def apply_ti_physics(self, mem: ti.types.ndarray(), ti_inds: ti.template()):
+        inds = ti_inds[None]
         for i, j in ti.ndrange(mem.shape[0], mem.shape[1]):
             total_gract = 0.0
-            capital = mem[i, j, ti_inds.capital]
+            capital = mem[i, j, inds.capital]
             delta_cap_total = 0.0
-            for mid in ti.static(range(ti_inds.muscles.n)):
-                total_gract += mem[i, j, ti_inds.growth_acts[mid]]
-            for mid in ti.static(range(ti_inds.muscles.n)):
-                muscle = mem[i, j, ti_inds.muscles[mid]]
-                delta = mem[i, j, ti_inds.growth_acts[mid]]
+            total_mass = 0.0
+            for mid in ti.static(range(inds.muscles.n)):
+                total_mass += mem[i, j, inds.muscles[mid]]
+                total_gract += mem[i, j, inds.growth_acts[mid]]
+            mem[i, j, inds.total_mass] = total_mass
+            for mid in ti.static(range(inds.muscles.n)):
+                muscle = mem[i, j, inds.muscles[mid]]
+                delta = mem[i, j, inds.growth_acts[mid]]
                 # Distributed across muscle activations - more fuel available to the muscles that want to grow the most
                 # This approximates continuous growth for N timestemps with a strength distribution across directions
                 cap_for_muscle = delta / total_gract * capital
@@ -77,38 +86,38 @@ class Eincasm:
                 )
                 new_rad, delta_cap = grow_out
                 delta_cap_total += delta_cap
-                mem[i, j, ti_inds.muscles[mid]] += new_rad
+                mem[i, j, inds.muscles[mid]] += new_rad
             capital += delta_cap_total
 
-            port = mem[i, j, ti_inds.port]
+            port = mem[i, j, inds.port]
             port_out = physics.activate_port_muscles_ti(
                 capital,
                 port,
-                mem[i, j, ti_inds.obstacle],
-                mem[i, j, ti_inds.muscles_port],
-                mem[i, j, ti_inds.muscle_acts_port],
+                mem[i, j, inds.obstacle],
+                mem[i, j, inds.muscles_port],
+                mem[i, j, inds.muscle_acts_port],
                 self.params.capital_per_work_mine,
             )
             delta_cap, delta_port = port_out
-            mem[i, j, ti_inds.port] += delta_port
+            mem[i, j, inds.port] += delta_port
             delta_cap_total += delta_cap
             capital += delta_cap_total
 
-            obstacle = mem[i, j, ti_inds.obstacle]
-            waste = mem[i, j, ti_inds.waste]
+            obstacle = mem[i, j, inds.obstacle]
+            waste = mem[i, j, inds.waste]
             mine_out = physics.activate_mine_muscles_ti(
                 capital,
                 obstacle,
                 waste,
-                mem[i, j, ti_inds.muscles_mine],
-                mem[i, j, ti_inds.muscle_acts_mine],
+                mem[i, j, inds.muscles_mine],
+                mem[i, j, inds.muscle_acts_mine],
                 self.params.capital_per_work_mine,
             )
             delta_cap, delta_ob, delta_waste = mine_out
             delta_cap_total += delta_cap
-            mem[i, j, ti_inds.capital] += delta_cap_total
-            mem[i, j, ti_inds.obstacle] += delta_ob
-            mem[i, j, ti_inds.waste] += delta_waste
+            mem[i, j, inds.capital] += delta_cap_total
+            mem[i, j, inds.obstacle] += delta_ob
+            mem[i, j, inds.waste] += delta_waste
 
 
     def init_channels(self):
@@ -148,6 +157,7 @@ class Eincasm:
                     port=ti.f32,
                     mine=ti.f32,
                 ),
+                "total_mass": ti.f32,
                 "muscle_acts": ti.types.struct(flow=ti.f32, port=ti.f32, mine=ti.f32),
                 "growth_acts": ti.types.struct(
                     flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
@@ -157,4 +167,5 @@ class Eincasm:
                 "com": ti.types.struct(r=ti.f32, g=ti.f32, b=ti.f32, a=ti.f32),
                 # rest=ti.types.vector(n=self.num_com-3, dtype=ti.f32))
             },
-        )
+       )
+    

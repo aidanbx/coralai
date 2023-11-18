@@ -1,6 +1,6 @@
 import torch
 import taichi as ti
-from .World import World
+from ..substrate.world import World
 
 def regen_ports(ports, period, port_id_map, resources):
     # TODO: take into account resource size and obstacles?
