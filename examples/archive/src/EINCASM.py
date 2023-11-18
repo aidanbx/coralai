@@ -6,7 +6,7 @@ from eincasm import (
     Simulation,
     Channel
 )
-from eincasm.sim import pcg, physics
+from eincasm.dynamics import pcg, physics
 
 # IDS
 MUSCLES = 'all_muscle_radii'

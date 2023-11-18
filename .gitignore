@@ -18,5 +18,7 @@ include/
 fake_data/
 runs/
 play/
-
+examples/taichi_examples/
+taichi_examples
 taichi_examples/
+./examples/taichi_examples/
