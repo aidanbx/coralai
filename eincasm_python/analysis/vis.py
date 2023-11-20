@@ -2,8 +2,7 @@ import time
 import taichi as ti
 from ..ti_struct_factory import TaichiStructFactory
 from ..substrate.world import World
-from .vis_params import VisParams, VIS_CHIDS
-
+# from .vis_params import VisParams, VIS_CHIDS
 
 @ti.data_oriented
 class Vis:
@@ -26,12 +25,12 @@ class Vis:
         self.chindices = chindices
 
         if scale is None:
-            max_dim = max(self.world.shape)
+            max_dim = max(self.world.w, self.world.h)
             desired_max_dim = 800
             scale = desired_max_dim // max_dim
 
-        self.img_w = self.world.shape[0] * scale
-        self.img_h = self.world.shape[1] * scale
+        self.img_w = self.world.w * scale
+        self.img_h = self.world.h * scale
         self.image = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.img_w, self.img_h))
 
         self.window = ti.ui.Window(
@@ -104,7 +103,7 @@ class Vis:
             xind = i // ps.scale
             yind = j // ps.scale
             for chnum in ti.static(range(3)):
-                self.image[i, j][chnum] = mem[xind, yind, ps.chindices[chnum]]
+                self.image[i, j][chnum] = mem[0, ps.chindices[chnum], xind, yind]
         params[None] = ps
 
 
@@ -114,16 +113,16 @@ class Vis:
         Use cursor position to paint selected value of selected channel - take into account pixel sizes
         """
         ps = params[None]
-        ind_x = int(ps.mouse_posx * mem.shape[0])
-        ind_y = int(ps.mouse_posy * mem.shape[1])
+        ind_x = int(ps.mouse_posx * mem.shape[2])
+        ind_y = int(ps.mouse_posy * mem.shape[3])
         for i, j in ti.ndrange(
             (-ps.brush_radius, ps.brush_radius), (-ps.brush_radius, ps.brush_radius)
         ):
             if (i**2) + j**2 < ps.brush_radius**2:
-                ix = (i + ind_x) % mem.shape[0]
-                jy = (j + ind_y) % mem.shape[1]
-                mem[ix, jy, ps.chindex_to_paint] += ti.math.clamp(
-                    mem[ix, jy, ps.chindex_to_paint] + ps.val_to_paint_dt,
+                ix = (i + ind_x) % mem.shape[2]
+                jy = (j + ind_y) % mem.shape[3]
+                mem[0, ps.chindex_to_paint, ix, jy] += ti.math.clamp(
+                    mem[0, ps.chindex_to_paint, ix, jy] + ps.val_to_paint_dt,
                     ps.chlims[ps.chnum_to_paint, 0],
                     ps.chlims[ps.chnum_to_paint, 1],
                 )

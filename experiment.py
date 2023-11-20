@@ -4,12 +4,12 @@ from eincasm_python.eincasm import Eincasm
 from eincasm_python.analysis.vis import Vis
 
 ti.init(ti.gpu)  
-ein = Eincasm(shape=(10, 10), torch_device=torch.device("mps"), num_com=5)
+ein = Eincasm(shape=(50, 50), torch_device=torch.device("mps"), num_com=5)
 
 w = ein.world
 
+
 vis = Vis(w, ['capital', ('com', 'g'), 'total_mass'])
-vis2 = Vis(w, [('com', 'r'), ('com', 'g'), ('com', 'b')])
 
 while vis.window.running or vis2.window.running:
     vps = vis.params[None]

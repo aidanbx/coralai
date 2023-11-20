@@ -3,7 +3,7 @@ import torch.nn as nn
 import taichi as ti
 from timeit import Timer
 
-VISUALIZE = True
+VISUALIZE = False
 """
 TODO:
 - Perception kernel of offsets
@@ -19,9 +19,9 @@ TODO:
 """
 # arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=ti.metal)
-w, h = 200, 200
-n_ch = 10
-kernel_radius = 4
+w, h = 400, 400
+n_ch = 3
+kernel_radius = 3
 n_im = n_ch//3  # 3 channels per image, nim images next to each other widthwise
 cell_size = 2
 img_w, img_h = w * cell_size * n_im, h * cell_size
@@ -82,6 +82,11 @@ def special_activation(state: ti.types.ndarray()):
     for I in ti.grouped(state):
         state[I] = ti.exp(state[I]) + 1.0
 
+@ti.kernel
+def inverse_sigmoid(state: ti.types.ndarray()):
+    for I in ti.grouped(state):
+        state[I] = ti.log(state[I] / (1.0 - state[I]))
+
 @ti.data_oriented
 class NCA(nn.Module):
     def __init__(self, channel_count, visualize = True):
@@ -121,18 +126,10 @@ class NCA(nn.Module):
     def forward(self, x):
         conv2d(x, self.weights, self.convout)
         x=self.convout
-        # x = self.conv(x.unsqueeze(0))
-        # x = self.convout.unsqueeze(0)
         x = nn.ReLU()(x)
-        special_activation(x)
         self.ch_norm_(x)
         x = torch.sigmoid(x)
-        # x = (x - x.mean()) / x.std()
-        # x = nn.BatchNorm2d(x.shape[1])(x)
-        # x = torch.tanh(x)
         x = x.squeeze(0)
-        # print(x.min(), x.max())
-        # x[:, 45:50, 45:75] = 0.0
         return x
 
     def apply_rules(self):
@@ -202,9 +199,8 @@ if __name__ == "__main__":
     if VISUALIZE:
         main_vis(img_w, img_h, num_ch=n_ch)
     else:  
-
         model = NCA(n_ch, visualize=False)
-
+        model.apply_rules()
         # Initialize Timer object with the function to measure
         t = Timer(model.apply_rules)
 

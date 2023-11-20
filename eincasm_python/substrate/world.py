@@ -12,7 +12,9 @@ class World:
     # TODO: Support multi-level indexing beyond 2 levels
     # TODO: Support mixed taichi and torch tensors - which will be transferred more?
     def __init__(self, shape, torch_dtype, torch_device, channels: dict = None):
-        self.shape = (*shape, 0)
+        self.w = shape[0]
+        self.h = shape[1]
+        self.shape = (*shape, 0) # changed in malloc
         self.mem = None
         self.windex = None
         self.torch_dtype = torch_dtype
@@ -112,10 +114,6 @@ class World:
         return mem, channel_dict
 
 
-    # def nch(self, key):
-    #     return self.windex[key].shape[0]
-
-
     def add_ti_inds(self, key, inds):
         if len(inds) == 1:
             self.ti_ind_builder.add_i(key, inds[0])
@@ -189,34 +187,20 @@ class World:
         self.windex = WorldIndex(index_tree)
         self.ti_indices = self.ti_ind_builder.build()
         self.ti_lims = self.ti_lims_builder.build()
+        self.mem = self.mem.permute(2, 0, 1).unsqueeze(0).contiguous()
+        self.shape = self.mem.shape
 
 
     def __getitem__(self, key):
         if self.mem is None:
             raise ValueError(f"World: World memory not allocated yet, cannot get {key}")
-        val = self.mem[:, :, self.windex[key]]
+        val = self.mem[self.windex[key], :, :]
         return val
-
-
+    
     def __setitem__(self, key, value):
         if self.mem is None:
             raise ValueError(f"World: World memory not allocated yet, cannot set {key}")
-        indices = self.windex[key]
-        if len(indices) > 1:
-            if value.shape != self[key].shape:
-                raise ValueError(
-                    f"World: Cannot set channel(s) {key} to value of shape {value.shape}. Expected shape: {self[key].shape}"
-                )
-            self.mem[:, :, indices] = value
-            self.mem = self.mem.contiguous()
-        if len(indices) == 1:
-            if len(value.shape) == 3:
-                value = value.squeeze(2)
-            if value.shape != self.shape[:2]:
-                raise ValueError(
-                    f"World: Cannot set channel {key} to value of shape {value.shape}. Expected shape: {self.shape[:2]}"
-                )
-            self.mem[:, :, indices[0]].copy_(value)
+        raise NotImplementedError("World: Setting world values not implemented yet. (Just manipulate memory directly)")
 
 
     def get_inds_tivec(self, key):
@@ -241,14 +225,3 @@ class World:
         lims = np.array(lims, dtype=np.float32)
         ltype = ti.types.matrix(lims.shape[0], lims.shape[1], dtype=ti.f32)
         return ltype(lims)
-
-
-    # def get_channel_indices(self):
-    #     chindices = np.array(self.windex_obj[self.channels], dtype=np.int32)
-    #     if len(chindices) != 4:
-    #         raise ValueError(
-    #             "PixelVis: Oops, Error in indexing channels via world, got more than 4 Channel IDs - should have been caught above"
-    #         )
-    #     chids_field = ti.field(dtype=ti.i32, shape=4)
-    #     chids_field.from_numpy(chindices)
-    #     return chids_field

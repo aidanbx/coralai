@@ -55,7 +55,7 @@ class Eincasm:
 
 
     def apply_physics(self):
-        physics.activate_flow_muscles(self.world, self.flow_kernel, self.params.flow_cost)
+        # physics.activate_flow_muscles(self.world, self.flow_kernel, self.params.flow_cost)
         self.apply_ti_physics(self.world.mem, self.world.ti_indices)
 
 
@@ -153,14 +153,16 @@ class Eincasm:
                 },
                 "portmap": ti.i8,
                 "muscles": ti.types.struct(
-                    flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
+                    flowx=ti.f32,
+                    flowy=ti.f32, #ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
                     port=ti.f32,
                     mine=ti.f32,
                 ),
                 "total_mass": ti.f32,
                 "muscle_acts": ti.types.struct(flow=ti.f32, port=ti.f32, mine=ti.f32),
                 "growth_acts": ti.types.struct(
-                    flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
+                    flowx=ti.f32,
+                    flowy=ti.f32, #ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
                     port=ti.f32,
                     mine=ti.f32,
                 ),

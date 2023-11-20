@@ -1,6 +1,7 @@
 import taichi as ti
 import torch
 import torch.nn as nn
+from .nn_lib import ch_norm
 
 LATENT_SIZE = 4
 
@@ -9,8 +10,8 @@ class Organism:
     def __init__(self, world):
         self.world = world
         self.shape = world.shape
-        self.w = world.shape[0]
-        self.h = world.shape[1]
+        self.w = world.w
+        self.h = world.h
         self.sensors = [('com', 'r'), ('com', 'g'), ('com', 'b'), ('com', 'a')]
         self.actuators = [('com', 'r'), ('com', 'g'), ('com', 'b'), ('com', 'a')]
         self.define_weights(self.sensors, self.actuators)
@@ -28,23 +29,6 @@ class Organism:
         self.latent_bias = torch.zeros(1, device=self.world.torch_device)#torch.randn(1)
         self.act_bias = torch.zeros(1, device=self.world.torch_device)#torch.randn(1)
         
-    @ti.func
-    def ReLU(self, x):
-        return x if x > 0 else 0
-
-    @ti.func
-    def sigmoid(self, x):
-        return 1 / (1 + ti.exp(-x))
-
-    @ti.func
-    def inverse_gaussian(self, x):
-        return -1./(ti.exp(0.89*ti.pow(x, 2.))+1.)+1.
-
-    def ch_norm_(self, input_tensor):
-        mean = input_tensor.mean(dim=(0, 1), keepdim=True)
-        var = input_tensor.var(dim=(0, 1), keepdim=True, unbiased=False)
-        input_tensor.sub_(mean).div_(torch.sqrt(var + 1e-5))
-
     @ti.kernel
     def sense_act(self,
                   mem: ti.types.ndarray(),
@@ -107,7 +91,7 @@ class Organism:
             # self.latent_layer)
         x = self.world[self.actuators]
         x = nn.ReLU()(x)
-        self.ch_norm_(x)
+        ch_norm(x)
         x = torch.sigmoid(x)
         self.world[self.actuators] = x
 
