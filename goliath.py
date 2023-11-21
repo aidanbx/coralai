@@ -494,38 +494,31 @@ def write_to_renderer(mem: ti.types.ndarray()):
         for ch in ti.static(range(3)):
             render_buffer[i, j][ch] = mem[0, offset+ch, xind, yind]
 
-def check_input(window, mem):
-    drawing = False
-    for e in window.get_events(ti.ui.PRESS):
-        if e.key in  [ti.ui.ESCAPE]:
-            exit()
-        if e.key == ti.ui.LMB and window.is_pressed(ti.ui.SHIFT):
-            drawing = True
-        elif e.key == ti.ui.SPACE:
-            mem *= 0.0
-        # elif e.key == 'r':
-        #     self.perturbing_weights = True
-
-    for e in window.get_events(ti.ui.RELEASE):
-        if e.key == ti.ui.LMB:
-            drawing = False
-    
-    return drawing
-
-
 ein = NCA(shape=(w, h), torch_device=torch.device("mps"))
 
-window = ti.ui.Window('NCA Visualization', (w, h), vsync=True)
+window = ti.ui.Window('NCA Visualization', (w, h), fps_limit=200, vsync=True)
 canvas = window.get_canvas()
 gui = window.get_gui()
 paused = False
 brush_radius = 3
 perturbing_weights = False
 perturbation_strength = 0.1
+drawing = False
 while window.running:
     if not paused:
         ein.world.mem = ein.organism.forward(ein.world.mem)
-        if check_input(window, ein.world.mem):
+        for e in window.get_events(ti.ui.PRESS):
+            if e.key in  [ti.ui.ESCAPE]:
+                exit()
+            if e.key == ti.ui.LMB and window.is_pressed(ti.ui.SHIFT):
+                drawing = True
+            elif e.key == ti.ui.SPACE:
+                ein.world.mem *= 0.0
+        for e in window.get_events(ti.ui.RELEASE):
+            if e.key == ti.ui.LMB:
+                drawing = False
+                
+        if drawing:
             pos = window.get_cursor_pos()
             add_one(pos[0], pos[1], brush_radius, ein.world.mem)
         write_to_renderer(ein.world.mem)

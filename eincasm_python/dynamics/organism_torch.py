@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from .nn_lib import ch_norm
 
+LATENT_SIZE = 10
 
 @ti.data_oriented
 class Organism(nn.Module):
@@ -19,6 +20,16 @@ class Organism(nn.Module):
         # First convolutional layer
         self.conv = nn.Conv2d(
             self.n_sensors,
+            LATENT_SIZE,
+            kernel_size=3,
+            padding=1,
+            padding_mode='circular',
+            device=self.world.torch_device,
+            bias=False
+        )
+
+        self.latent_conv = nn.Conv2d(
+            LATENT_SIZE,
             self.n_actuators,
             kernel_size=3,
             padding=1,
@@ -35,8 +46,15 @@ class Organism(nn.Module):
             x = self.conv(x)
             x = nn.ReLU()(x)
             x = ch_norm(x)
-            return torch.sigmoid(x)
+            x = torch.sigmoid(x)
 
+            x = self.latent_conv(x)
+            x = nn.ReLU()(x)
+            x = ch_norm(x)
+            x = torch.sigmoid(x)
+            return x
+        
 
     def perturb_weights(self, perturbation_strength):
         self.conv.weight.data += perturbation_strength * torch.randn_like(self.conv.weight.data) 
+        self.latent_conv.weight.data += perturbation_strength * torch.randn_like(self.latent_conv.weight.data)
