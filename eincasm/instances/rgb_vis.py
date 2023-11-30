@@ -1,10 +1,11 @@
 import time
 import taichi as ti
 from ..substrate.world import World
+from ..analysis.visualization import Visualization
 
 
 @ti.data_oriented
-class Vis:
+class RGBVis(Visualization):
     def __init__(
         self,
         world: World,
@@ -12,13 +13,7 @@ class Vis:
         name: str = None,
         scale: int = None,
     ):
-        self.world = world
-        self.w = world.w
-        self.h = world.h
-        self.chids = chids
-        if name is None:
-            name = "Vis"
-        self.name = name
+        super(RGBVis, self).__init__(world, chids, name, scale)
 
         chindices = self.world.get_inds_tivec(self.chids)
         if chindices.n != 3:

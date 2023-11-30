@@ -1,6 +1,6 @@
 import time
 import taichi as ti
-from ..ti_struct_factory import TaichiStructFactory
+from ..utils.ti_struct_factory import TaichiStructFactory
 from ..substrate.world import World
 # from .vis_params import VisParams, VIS_CHIDS
 

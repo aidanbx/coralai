@@ -2,7 +2,7 @@ import warnings
 import torch
 import taichi as ti
 import numpy as np
-from ..ti_struct_factory import TaichiStructFactory
+from ..utils.ti_struct_factory import TaichiStructFactory
 from .channel import Channel
 from .world_index import WorldIndex
 

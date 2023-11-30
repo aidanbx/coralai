@@ -1,12 +1,9 @@
-import numpy as np
 import taichi as ti
 import torch
 
-from .substrate.world import World
-from .dynamics.organism_torch import Organism
-from .ein_params import EinParams
-from .dynamics import pcg
-from .dynamics import physics
+from ..substrate.world import World
+from ..ein_params import EinParams
+from ..dynamics import pcg
 
 
 @ti.data_oriented
@@ -50,8 +47,6 @@ class Eincasm:
     def apply_physics(self):
         # physics.activate_flow_muscles(self.world, self.flow_kernel, self.params.flow_cost)
         self.apply_ti_physics(self.world.mem, self.world.ti_indices)
-
-
 
     @ti.kernel
     def apply_ti_physics(self, mem: ti.types.ndarray(), ti_inds: ti.template()):

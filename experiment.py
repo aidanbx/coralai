@@ -1,7 +1,7 @@
 import taichi as ti
 import torch
-from eincasm_python.eincasm import Eincasm
-from eincasm_python.analysis.vis import Vis
+from eincasm.eincasm import Eincasm
+from eincasm.analysis.vis_old import Vis
 
 ti.init(ti.gpu)  
 ein = Eincasm(shape=(50, 50), torch_device=torch.device("mps"), num_com=5)

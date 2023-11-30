@@ -16,7 +16,7 @@ class Organism(nn.Module):
         self.sensor_inds = self.world.windex[self.sensors]
         self.n_sensors = self.sensor_inds.shape[0]
         self.n_actuators = n_actuators
-        
+
         # First convolutional layer
         self.conv = nn.Conv2d(
             self.n_sensors,
@@ -53,7 +53,7 @@ class Organism(nn.Module):
             x = ch_norm(x)
             x = torch.sigmoid(x)
             return x
-        
+
 
     def perturb_weights(self, perturbation_strength):
         self.conv.weight.data += perturbation_strength * torch.randn_like(self.conv.weight.data) 
