@@ -85,7 +85,8 @@ def activate_mine_muscles_ti(capital:               ti.f32,
         delta_waste = desired_delta
         delta_capital = desired_delta * capital_per_work
     return delta_capital, delta_obstacle, delta_waste
-
+                  
+                  
 
 def activate_flow_muscles(world: World, flow_kernel, flow_cost):
     capital = world['capital'].squeeze(2)
@@ -150,9 +151,9 @@ def activate_flow_muscles(world: World, flow_kernel, flow_cost):
 
     # capital = torch.where(capital < 0.01, cfg.zero_tensor, capital) # should be non-negative before this, just for cleanup
 
-    # assert capital.min() >= 0, "Capital cannot be negative (after flow)"
-    # capital_diff = capital.sum() - total_capital_before
-    # assert capital_diff <= 0, f"Oops, capital was invented during flow. Diff: {capital_diff}"
+    assert capital.min() >= 0, "Capital cannot be negative (after flow)"
+    capital_diff = capital.sum() - total_capital_before
+    assert capital_diff <= 0, f"Oops, capital was invented during flow. Diff: {capital_diff}"
 
 
 

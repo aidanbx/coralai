@@ -3,19 +3,19 @@ import taichi as ti
 
 class Channel:
     def __init__(
-            self, id, world, ti_dtype=ti.f32,
+            self, chid, world, ti_dtype=None,
             lims=None,
             metadata: dict=None, **kwargs):
-        self.id = id
+        self.chid = chid
         self.world = world
         self.lims = np.array(lims) if lims else np.array([-1, 1], dtype=np.float32)
-        self.ti_dtype = ti_dtype
+        self.ti_dtype = ti_dtype if ti_dtype is not None else ti.f32
         self.memblock = None
         self.indices = None
         self.metadata = metadata if metadata is not None else {}
         self.metadata.update(kwargs)
         field_md = {
-            'id': self.id,
+            'id': self.chid,
             'ti_dtype': self.ti_dtype,
             'lims': self.lims,
         }
@@ -29,17 +29,17 @@ class Channel:
         self.indices = indices
         self.metadata['indices'] = indices
     
-    def add_subchannel(self, id, ti_dtype=ti.f32, **kwargs):
-        subch = Channel(id, self.world, ti_dtype=ti_dtype, **kwargs)
+    def add_subchannel(self, chid, ti_dtype=ti.f32, **kwargs):
+        subch = Channel(chid, self.world, ti_dtype=ti_dtype, **kwargs)
         subch.metadata['parent'] = self
-        self.metadata[id] = subch
+        self.metadata[chid] = subch
         self.metadata['subchids'] = self.metadata.get('subchids', [])
-        self.metadata['subchids'].append(id)
+        self.metadata['subchids'].append(chid)
         return subch
 
     def get_data(self):
         if self.memblock is None:
-            raise ValueError(f"Channel: Channel {self.id} has not been allocated yet.")
+            raise ValueError(f"Channel: Channel {self.chid} has not been allocated yet.")
         else:
             return self.memblock[self.indices]
 

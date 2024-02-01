@@ -2,15 +2,14 @@ import numpy as np
 import taichi as ti
 import torch
 
-from .substrate.world import World
-from .dynamics.organism_torch import Organism
+from ..substrate.world import World
+from ..dynamics.organism_torch import Organism
 from .ein_params import EinParams
-from .dynamics import pcg
-from .dynamics import physics
-
+from ..dynamics import pcg
+from ..dynamics import physics
 
 @ti.data_oriented
-class Eincasm:
+class fluvia:
     def __init__(
         self,
         params: EinParams = None,
@@ -49,13 +48,10 @@ class Eincasm:
         self.cid, self.mids = 0, np.array([1, 2])
         self.sensors = ['capital', 'obstacle', 'com']
         self.actuators = ['com', 'muscle_acts', 'growth_acts']
-        self.organism = Organism(self.world,
-                                 sensors = self.sensors,
-                                 actuators = self.actuators)
-
+        self.organism = Organism(self.world, self.sensors, self.actuators)
 
     def apply_physics(self):
-        physics.activate_flow_muscles(self.world, self.flow_kernel, self.params.flow_cost)
+        # physics.activate_flow_muscles(self.world, self.flow_kernel, self.params.flow_cost)
         self.apply_ti_physics(self.world.mem, self.world.ti_indices)
 
 
@@ -153,14 +149,16 @@ class Eincasm:
                 },
                 "portmap": ti.i8,
                 "muscles": ti.types.struct(
-                    flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
+                    flowx=ti.f32,
+                    flowy=ti.f32, #ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
                     port=ti.f32,
                     mine=ti.f32,
                 ),
                 "total_mass": ti.f32,
                 "muscle_acts": ti.types.struct(flow=ti.f32, port=ti.f32, mine=ti.f32),
                 "growth_acts": ti.types.struct(
-                    flow=ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
+                    flowx=ti.f32,
+                    flowy=ti.f32, #ti.types.vector(n=self.flow_kernel.shape[0], dtype=ti.f32),
                     port=ti.f32,
                     mine=ti.f32,
                 ),

@@ -1,15 +1,15 @@
 import taichi as ti
 import torch
-from eincasm_python.eincasm import Eincasm
-from eincasm_python.analysis.vis import Vis
+from fluvia.fluvia import fluvia
+from fluvia.analysis.vis_old import Vis
 
 ti.init(ti.gpu)  
-ein = Eincasm(shape=(10, 10), torch_device=torch.device("mps"), num_com=5)
+ein = fluvia(shape=(50, 50), torch_device=torch.device("mps"), num_com=5)
 
 w = ein.world
 
+
 vis = Vis(w, ['capital', ('com', 'g'), 'total_mass'])
-vis2 = Vis(w, [('com', 'r'), ('com', 'g'), ('com', 'b')])
 
 while vis.window.running or vis2.window.running:
     vps = vis.params[None]
