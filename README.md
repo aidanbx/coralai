@@ -19,7 +19,21 @@ The goal of Fluvia is to produce robust and adaptable organisms that can survive
 
 More work is to be done on experimentation, analysis, parameter searches, and the evolution of physics/rules.
 
-  
+# Code Organization
+### ./
+- Here is where you create a new experiment and run it. 
+- ./nca_slim.py is a simple example experiment
+### ./fluvia
+- This module contains all the necessary code for running fluvia experiments
+### ./fluvia/substrate
+- The universe the fluvia runs in. Mostly memory management and manipulation/evolution of organism architectures
+### ./fluvia/dynamics
+- Code that modifies memory incl. physics, organisms (NCA), weather, and procedural content generation.
+### ./fluvia/analysis
+- Visualizations, statistics, and experimental frameworks that track and evolve organisms over time.
+### ./fluvia/instances
+- Specific instances of fluvia, including basic random NCA and EINCASM (see below)
+
 ## EINCASM: Emergent Intelligence in Neural Cellular Automata Slime Molds
 
 This is the old title of this research, which has since been expanded to capture a larger diversity of emergent behaviors
@@ -28,14 +42,6 @@ Conference paper presented at ALIFE 2023, Sapporo, Japan
 - **Paper:** https://direct.mit.edu/isal/proceedings/isal/35/82/116945
 - **Recording of Presentation:** https://www.youtube.com/watch?v=RuLQRgi6YSU&t=514s
 - **Workshop Discussion on Machine Love and Human Flourishing:** https://www.youtube.com/watch?v=tfQhXOBchKY
-
-# Code Organization
-### ./
-- Here is where you create a new experiment and run it. 
-- ./nca_slim.py is a simple example experiment
-### ./fluvia
-- This is the module 
-  
 
 # Contact
 
