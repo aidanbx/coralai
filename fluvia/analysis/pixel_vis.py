@@ -1,8 +1,8 @@
 # import taichi as ti
 # import numpy as np
 # from matplotlib.cm import get_cmap
-# from eincasm.sim.World import World
-# from eincasm.Experiment import eincasm as Eincasm
+# from fluvia.sim.World import World
+# from fluvia.Experiment import fluvia as fluvia
 # from .Vis import Vis
 # import time
 
@@ -11,8 +11,8 @@
 
 # @ti.data_oriented
 # class PixelVis(Vis):
-#     def __init__(self, eincasm: Eincasm, ch_cmaps: dict, scale=None, out_path=None):
-#         super().__init__(eincasm, ch_cmaps, scale=scale, out_path=out_path)
+#     def __init__(self, fluvia: fluvia, ch_cmaps: dict, scale=None, out_path=None):
+#         super().__init__(fluvia, ch_cmaps, scale=scale, out_path=out_path)
 
 #         if scale is None:
 #             max_dim = max(self.world.shape)

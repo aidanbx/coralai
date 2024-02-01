@@ -1,10 +1,10 @@
 import taichi as ti
 import torch
-from eincasm.eincasm import Eincasm
-from eincasm.analysis.vis_old import Vis
+from fluvia.fluvia import fluvia
+from fluvia.analysis.vis_old import Vis
 
 ti.init(ti.gpu)  
-ein = Eincasm(shape=(50, 50), torch_device=torch.device("mps"), num_com=5)
+ein = fluvia(shape=(50, 50), torch_device=torch.device("mps"), num_com=5)
 
 w = ein.world
 

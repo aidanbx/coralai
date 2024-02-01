@@ -7,7 +7,7 @@ from ..dynamics import pcg
 
 
 @ti.data_oriented
-class Eincasm:
+class fluvia:
     def __init__(
         self,
         params: EinParams = None,

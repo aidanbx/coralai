@@ -1,10 +1,10 @@
 import taichi as ti
 import torch
 
-from eincasm.substrate.world import World
-from eincasm.instances.rgb_vis import RGBVis
-from eincasm.instances.nca_organism import NCAOrganism
-from eincasm.analysis.simulation import Simulation
+from fluvia.substrate.world import World
+from fluvia.instances.rgb_vis import RGBVis
+from fluvia.instances.nca_organism import NCAOrganism
+from fluvia.analysis.simulation import Simulation
 
 ti.init(ti.metal)
 torch_device = torch.device("mps")
