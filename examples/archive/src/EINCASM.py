@@ -2,11 +2,11 @@ import random
 from scipy import signal
 import numpy as np
 import torch
-from fluvia import (
+from coralai import (
     Simulation,
     Channel
 )
-from fluvia.dynamics import pcg, physics
+from coralai.dynamics import pcg, physics
 
 # IDS
 MUSCLES = 'all_muscle_radii'

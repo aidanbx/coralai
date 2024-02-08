@@ -2,10 +2,10 @@ import numpy as np
 import taichi as ti
 import torch
 
-from fluvia.substrate.world import World
-from fluvia.dynamics.organism_torch import Organism
-from fluvia.dynamics import pcg
-from fluvia.dynamics import physics
+from coralai.substrate.world import World
+from coralai.dynamics.organism_torch import Organism
+from coralai.dynamics import pcg
+from coralai.dynamics import physics
 
 if __name__ == "__main__":
     ti.init(ti.gpu)

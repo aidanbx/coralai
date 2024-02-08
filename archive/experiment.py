@@ -1,10 +1,10 @@
 import taichi as ti
 import torch
-from fluvia.fluvia import fluvia
-from fluvia.analysis.vis_old import Vis
+from coralai.coralai import coralai
+from coralai.analysis.vis_old import Vis
 
 ti.init(ti.gpu)  
-ein = fluvia(shape=(50, 50), torch_device=torch.device("mps"), num_com=5)
+ein = coralai(shape=(50, 50), torch_device=torch.device("mps"), num_com=5)
 
 w = ein.world
 
