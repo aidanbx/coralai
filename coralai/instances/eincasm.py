@@ -72,7 +72,7 @@ class coralai:
                 delta = mem[i, j, inds.growth_acts[mid]]
                 # Distributed across muscle activations - more fuel available to the muscles that want to grow the most
                 # This approximates continuous growth for N timestemps with a strength distribution across directions
-                cap_for_muscle = delta / total_gract * capital
+                cap_for_muscle = (delta / total_gract) * capital
                 grow_out = physics.grow_muscle_csa_ti(
                     cap_for_muscle,
                     muscle,

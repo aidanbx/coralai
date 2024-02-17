@@ -23,15 +23,15 @@ class NCAOrganism(Organism):
             bias=False
         )
 
-        self.latent_conv = nn.Conv2d(
-            self.latent_size,
-            self.latent_size,
-            kernel_size=3,
-            padding=1,
-            padding_mode='circular',
-            device=self.world.torch_device,
-            bias=False
-        )
+        # self.latent_conv = nn.Conv2d(
+        #     self.latent_size,
+        #     self.latent_size,
+        #     kernel_size=3,
+        #     padding=1,
+        #     padding_mode='circular',
+        #     device=self.world.torch_device,
+        #     bias=False
+        # )
 
         self.latent_conv_2 = nn.Conv2d(
             self.latent_size,
@@ -53,10 +53,10 @@ class NCAOrganism(Organism):
             x = ch_norm(x)
             x = torch.sigmoid(x)
 
-            x = self.latent_conv(x)
-            x = nn.ReLU()(x)
-            x = ch_norm(x)
-            x = torch.sigmoid(x)
+            # x = self.latent_conv(x)
+            # x = nn.ReLU()(x)
+            # x = ch_norm(x)
+            # x = torch.sigmoid(x)
 
             x = self.latent_conv_2(x)
             x = nn.ReLU()(x)
@@ -67,5 +67,5 @@ class NCAOrganism(Organism):
 
     def perturb_weights(self, perturbation_strength):
         self.conv.weight.data += perturbation_strength * torch.randn_like(self.conv.weight.data)
-        self.latent_conv.weight.data += perturbation_strength * torch.randn_like(self.latent_conv.weight.data)
+        # self.latent_conv.weight.data += perturbation_strength * torch.randn_like(self.latent_conv.weight.data)
         self.latent_conv_2.weight.data += perturbation_strength * torch.randn_like(self.latent_conv_2.weight.data)

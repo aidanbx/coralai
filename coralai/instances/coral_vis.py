@@ -6,7 +6,7 @@ from ..analysis.visualization import Visualization
 
 
 @ti.data_oriented
-class RGBVis(Visualization):
+class CoralVis(Visualization):
     def __init__(
         self,
         world: World,
@@ -14,7 +14,7 @@ class RGBVis(Visualization):
         name: str = None,
         scale: int = None,
     ):
-        super(RGBVis, self).__init__(world, chids, name, scale)
+        super(CoralVis, self).__init__(world, chids, name, scale)
 
         chindices = self.world.get_inds_tivec(self.chids)
         if chindices.n != 3:
@@ -57,7 +57,7 @@ class RGBVis(Visualization):
         offset = int(pos_x) * 3
         for i, j in ti.ndrange((-radius, radius), (-radius, radius)):
             if (i**2) + j**2 < radius**2:
-                mem[0, offset+channel_to_paint, (i + ind_x) % self.w, (j + ind_y) % self.h] +=1
+                mem[0, channel_to_paint, (i + ind_x) % self.w, (j + ind_y) % self.h] += 1
 
 
     @ti.kernel
@@ -67,7 +67,7 @@ class RGBVis(Visualization):
             yind = (j//self.scale) % self.h
             for k in ti.static(range(3)):
                 chid = chindices[k]
-                self.image[i, j][k] = mem[0, chid, xind, yind]
+                self.image[i, j][k] = mem[0, chid, xind, yind]#/max_vals[k]
 
 
     def check_events(self):
@@ -93,7 +93,15 @@ class RGBVis(Visualization):
             self.paused = sub_w.checkbox("Pause", self.paused)
             self.perturbing_weights = sub_w.checkbox("Perturb Weights", self.perturbing_weights)
             self.channel_to_paint = sub_w.slider_int("Channel to Paint", self.channel_to_paint, 0, 2)
-            
+            sub_w.text("Channel Stats:")
+            for channel_name in ['energy', 'infra']:
+                chindex = self.world.windex[channel_name]
+                max_val = self.world.mem[0, chindex].max()
+                min_val = self.world.mem[0, chindex].min()
+                avg_val = self.world.mem[0, chindex].mean()
+                sum_val = self.world.mem[0, chindex].sum()
+                sub_w.text(f"{channel_name}: Max: {max_val:.2f}, Min: {min_val:.2f}, Avg: {avg_val:.2f}, Sum: {sum_val:.2f}")
+    
 
     def update(self):
         if not self.paused:
