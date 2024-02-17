@@ -4,7 +4,7 @@ import torch
 from coralai.substrate.world import World
 from coralai.analysis.simulation import Simulation
 from coralai.instances.coral_vis import CoralVis
-from coralai.instances.coral_organism import CoralOrganism
+from coralai.instances.coral_organism_torch import CoralOrganism
 
 
 N_HIDDEN_CHANNELS=8

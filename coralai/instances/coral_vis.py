@@ -52,12 +52,13 @@ class CoralVis(Visualization):
             channel_to_paint: ti.i32,
             mem: ti.types.ndarray()
         ):
-        ind_x = int(pos_x * self.w)
-        ind_y = int(pos_y * self.h)
-        offset = int(pos_x) * 3
-        for i, j in ti.ndrange((-radius, radius), (-radius, radius)):
-            if (i**2) + j**2 < radius**2:
-                mem[0, channel_to_paint, (i + ind_x) % self.w, (j + ind_y) % self.h] += 1
+        pass
+        # ind_x = int(pos_x * self.w)
+        # ind_y = int(pos_y * self.h)
+        # offset = int(pos_x) * 3
+        # for i, j in ti.ndrange((-radius, radius), (-radius, radius)):
+        #     if (i**2) + j**2 < radius**2:
+        #         mem[0, channel_to_paint, (i + ind_x) % self.w, (j + ind_y) % self.h] += 1
 
 
     @ti.kernel
@@ -86,7 +87,7 @@ class CoralVis(Visualization):
     def render_opt_window(self):
         self.canvas.set_background_color((1, 1, 1))
         opt_w = min(480 / self.img_w, self.img_w)
-        opt_h = min(360 / self.img_h, self.img_h * 2)
+        opt_h = min(250 / self.img_h, self.img_h * 2)
         with self.gui.sub_window("Options", 0.05, 0.05, opt_w, opt_h) as sub_w:
             self.brush_radius = sub_w.slider_int("Brush Radius", self.brush_radius, 1, 200)
             self.perturbation_strength = sub_w.slider_float("Perturbation Strength", self.perturbation_strength, 0.0, 5.0)
