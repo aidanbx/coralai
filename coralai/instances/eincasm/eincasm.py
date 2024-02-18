@@ -6,7 +6,7 @@ from ..substrate.world import World
 from ..dynamics.organism_torch import Organism
 from .ein_params import EinParams
 from ..dynamics import pcg
-from ..dynamics import physics
+from ..dynamics import ein_physics
 
 @ti.data_oriented
 class coralai:
@@ -73,7 +73,7 @@ class coralai:
                 # Distributed across muscle activations - more fuel available to the muscles that want to grow the most
                 # This approximates continuous growth for N timestemps with a strength distribution across directions
                 cap_for_muscle = (delta / total_gract) * capital
-                grow_out = physics.grow_muscle_csa_ti(
+                grow_out = ein_physics.grow_muscle_csa_ti(
                     cap_for_muscle,
                     muscle,
                     delta,
@@ -86,7 +86,7 @@ class coralai:
             capital += delta_cap_total
 
             port = mem[i, j, inds.port]
-            port_out = physics.activate_port_muscles_ti(
+            port_out = ein_physics.activate_port_muscles_ti(
                 capital,
                 port,
                 mem[i, j, inds.obstacle],
@@ -101,7 +101,7 @@ class coralai:
 
             obstacle = mem[i, j, inds.obstacle]
             waste = mem[i, j, inds.waste]
-            mine_out = physics.activate_mine_muscles_ti(
+            mine_out = ein_physics.activate_mine_muscles_ti(
                 capital,
                 obstacle,
                 waste,

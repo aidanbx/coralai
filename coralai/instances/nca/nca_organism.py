@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from ..dynamics.nn_lib import ch_norm
-from ..dynamics.Organism import Organism
+from ...dynamics.nn_lib import ch_norm
+from ...dynamics.Organism import Organism
 
 class NCAOrganism(Organism):
     def __init__(self, world, sensors, n_actuators, latent_size = None):

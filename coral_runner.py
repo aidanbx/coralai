@@ -3,16 +3,15 @@ import torch
 
 from coralai.substrate.world import World
 from coralai.analysis.simulation import Simulation
-from coralai.instances.coral_vis import CoralVis
-from coralai.instances.coral_organism_torch import CoralOrganism
-
-
-N_HIDDEN_CHANNELS=8
+from coralai.instances.coral.coral_vis import CoralVis
+from coralai.instances.coral.coral_physics import CoralPhysics
+from coralai.instances.coral.coral_organism_torch import CoralOrganism
 
 ti.init(ti.metal)
 torch_device = torch.device("mps")
-shape = (400, 400)
 
+N_HIDDEN_CHANNELS=8
+shape = (400, 400)
 
 world = World(
     shape=shape,
@@ -29,13 +28,14 @@ world = World(
 
 world.malloc()
 
+physics = CoralPhysics()
+
 organism = CoralOrganism(world,
     sensors = ['energy', 'infra', 'last_move', 'com'],
     n_actuators = 1 + 1 + 1 + N_HIDDEN_CHANNELS) # invest, liquidate, explore, hidden
-print(world.windex)
-# vis = CoralVis(world, ['rgb'])
+
 vis = CoralVis(world, ['energy', 'infra', 'last_move'])
 
-sim = Simulation(world, organism, vis)
+sim = Simulation(world, physics, organism, vis)
 
 sim.run()

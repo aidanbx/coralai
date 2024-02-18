@@ -2,8 +2,9 @@ import taichi as ti
 import torch
 
 from coralai.substrate.world import World
-from coralai.instances.rgb_vis import RGBVis
-from coralai.instances.nca_organism import NCAOrganism
+from coralai.instances.nca.rgb_vis import RGBVis
+from coralai.instances.nca.nca_organism import NCAOrganism
+from coralai.instances.nca.nca_physics import NCAPhysics
 from coralai.analysis.simulation import Simulation
 
 ti.init(ti.metal)
@@ -22,12 +23,14 @@ world = World(shape=shape,
 
 world.malloc()
 
+physics = NCAPhysics()
+
 organism = NCAOrganism(world,
         sensors = ['rgb', 'hidden'],
         n_actuators = world.windex[['rgb', 'hidden']].shape[0])
 
 vis = RGBVis(world, ['rgb'])
 
-sim = Simulation(world, organism, vis)
+sim = Simulation(world, physics, organism, vis)
 
 sim.run()
