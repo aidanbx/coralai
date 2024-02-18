@@ -1,4 +1,4 @@
-from fluvia import utils
+from coralai import utils
 # from src.Channel import Channel
 import json
 from pprint import pformat

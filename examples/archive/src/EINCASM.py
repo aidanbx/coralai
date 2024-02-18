@@ -2,11 +2,11 @@ import random
 from scipy import signal
 import numpy as np
 import torch
-from fluvia import (
+from coralai import (
     Simulation,
     Channel
 )
-from fluvia.dynamics import pcg, physics
+from coralai.dynamics import ein_physics, pcg
 
 # IDS
 MUSCLES = 'all_muscle_radii'
@@ -90,27 +90,27 @@ class EINCASM:
             lambda sim, md: sim.metadata.update({'period': sim.metadata['period'] + 0.01}),
             req_sim_metadata = {'period': float})
         
-        self.sim.add_rule('grow', physics.grow_muscle_csa,
+        self.sim.add_rule('grow', ein_physics.grow_muscle_csa,
             input_channel_ids = [CAPITAL, MUSCLES, GROWTH_ACT],
             affected_channel_ids = [MUSCLES, CAPITAL],
             metadata = {'growth_cost': 0.2})
         
-        self.sim.add_rule('flow', physics.activate_flow_muscles,
+        self.sim.add_rule('flow', ein_physics.activate_flow_muscles,
             input_channel_ids = [CAPITAL, WASTE, OBSTACLES, FLOW_M, FLOW_MACT],
             affected_channel_ids = [CAPITAL],
             metadata = {'flow_cost': 0.2, 'kernel': self.kernel})
         
-        self.sim.add_rule('eat', physics.activate_port_muscles,
+        self.sim.add_rule('eat', ein_physics.activate_port_muscles,
             input_channel_ids = [CAPITAL, PORTS, OBSTACLES, PORT_M, PORT_MACT],
             affected_channel_ids = [CAPITAL],
             metadata = {'port_cost': 0.2})
         
-        self.sim.add_rule('dig', physics.activate_mine_muscles,
+        self.sim.add_rule('dig', ein_physics.activate_mine_muscles,
             input_channel_ids = [CAPITAL, OBSTACLES, WASTE, MINE_M, MINE_MACT],
             affected_channel_ids = [CAPITAL, WASTE],
             metadata = {'mining_cost': 0.2})
         
-        self.sim.add_rule('regen_resources', physics.regen_ports,
+        self.sim.add_rule('regen_resources', ein_physics.regen_ports,
             input_channel_ids = [PORTS], 
             affected_channel_ids = [PORTS],
             req_channel_metadata = {PORTS: ['port_id_map', 'port_sizes', 'resources']},
@@ -128,7 +128,7 @@ class EINCASM:
                 "threshold_sum": 2
             })
 
-        self.sim.add_rule('random_agent', physics.random_noise,
+        self.sim.add_rule('random_agent', ein_physics.random_noise,
             input_channel_ids = [],
             affected_channel_ids = [GROWTH_ACT, ALL_MUSCLE_ACT, COM])
 

@@ -1,6 +1,6 @@
 import torch
 from typing import Tuple
-from fluvia import Simulation, Channel
+from coralai import Simulation, Channel
 
 def random_noise(sim: Simulation, metadata: dict):
     for aff_id in metadata["affected_channel_ids"]:

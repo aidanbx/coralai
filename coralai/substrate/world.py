@@ -194,7 +194,7 @@ class World:
     def __getitem__(self, key):
         if self.mem is None:
             raise ValueError(f"World: World memory not allocated yet, cannot get {key}")
-        val = self.mem[self.windex[key], :, :]
+        val = self.mem[:, self.windex[key], :, :]
         return val
     
     def __setitem__(self, key, value):

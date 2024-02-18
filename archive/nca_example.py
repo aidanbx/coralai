@@ -1,8 +1,8 @@
 import taichi as ti
 import torch
 
-from fluvia.nca import NCA
-from fluvia.analysis.vis_old import Vis
+from coralai.nca import NCA
+from coralai.analysis.vis_old import Vis
 
 ti.init(ti.gpu)  
 ein = NCA(shape=(400, 400), torch_device=torch.device("mps"))
