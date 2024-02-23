@@ -1,6 +1,6 @@
 import torch
 import taichi as ti
-from ..substrate.world import World
+from ..substrate.substrate import Substrate
 
 def regen_ports(ports, period, port_id_map, resources):
     # TODO: take into account resource size and obstacles?
@@ -88,7 +88,7 @@ def activate_mine_muscles_ti(capital:               ti.f32,
                   
                   
 
-def activate_flow_muscles(world: World, flow_kernel, flow_cost):
+def activate_flow_muscles(world: Substrate, flow_kernel, flow_cost):
     capital = world['capital'].squeeze(2)
     waste = world['waste'].squeeze(2)
     obstacles = world['obstacle'].squeeze(2)

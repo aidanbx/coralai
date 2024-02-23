@@ -15,10 +15,10 @@ xor_outputs = [(0.0,), (1.0,), (1.0,), (0.0,)]
 checkpoint_dir = 'xor_checkpoints'
 os.makedirs(checkpoint_dir, exist_ok=True)
 
-checkpoint_prefix = 'neat-xor-checkpoint'
+checkpoint_prefix = 'neat_xor_checkpoint'
 
 # Create a special directory for output files
-output_dir = 'output'
+output_dir = 'neat_output'
 os.makedirs(output_dir, exist_ok=True)
 
 
@@ -44,8 +44,8 @@ def run(config_file):
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    p.add_reportecheckpoint_file = os.path.join(checkpoint_dir, 'neat-checkpoint')
-    p.add_reporter(neat.Checkpointer(generation_interval=5, filename_prefix=checkpoint_prefix))
+    checkpoint_prefix_full = os.path.join(checkpoint_dir, checkpoint_prefix)
+    p.add_reporter(neat.Checkpointer(generation_interval=5, filename_prefix=checkpoint_prefix_full))
 
     # Run for up to 300 generations.
     winner = p.run(eval_genomes, 300)
@@ -84,4 +84,3 @@ if __name__ == '__main__':
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, 'neat.config')
     run(config_path)
-

@@ -2,7 +2,7 @@ import numpy as np
 import taichi as ti
 import torch
 
-from coralai.substrate.world import World
+from coralai.substrate.substrate import Substrate
 from coralai.dynamics.organism_torch import Organism
 from coralai.dynamics import pcg
 from coralai.dynamics import ein_physics
@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     params = EinParams()
 
-    world = World(
+    world = Substrate(
         shape=shape,
         torch_dtype=torch.float32,
         torch_device=torch_device,

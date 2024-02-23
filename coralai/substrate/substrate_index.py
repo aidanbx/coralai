@@ -1,6 +1,6 @@
 import numpy as np
 
-class WorldIndex:
+class SubstrateIndex:
     def __init__(self, index_tree):
         self.index_tree = index_tree
 

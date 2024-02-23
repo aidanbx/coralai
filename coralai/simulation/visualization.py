@@ -1,30 +1,32 @@
 import time
-import taichi as ti
 import torch
-from ...substrate.world import World
-from ...analysis.visualization import Visualization
+import taichi as ti
+from ..substrate.substrate import Substrate
 
 
 @ti.data_oriented
-class RGBVis(Visualization):
-    def __init__(
-        self,
-        world: World,
-        chids: list,
-        name: str = None,
-        scale: int = None,
-    ):
-        super(RGBVis, self).__init__(world, chids, name, scale)
+class Visualization:
+    def __init__(self,
+                 world: Substrate,
+                 chids: list,
+                 name: str = None,
+                 scale: int = None,):
+        self.world = world
+        self.w = world.w
+        self.h = world.h
+        self.chids = chids
+        self.name = "Vis" if name is None else name
+        self.scale = 1 if scale is None else scale
 
         chindices = self.world.get_inds_tivec(self.chids)
-        if chindices.n != 3:
-            raise ValueError("Vis: ch_cmaps must have 3 channels")
+
         self.chindices = chindices
 
         if scale is None:
             max_dim = max(self.world.w, self.world.h)
             desired_max_dim = 800
             scale = desired_max_dim // max_dim
+            
         self.scale = scale
         self.img_w = self.world.w * scale
         self.img_h = self.world.h * scale
@@ -41,11 +43,14 @@ class RGBVis(Visualization):
         self.perturbation_strength = 0.1
         self.drawing = False
         self.prev_time = time.time()
+        self.prev_pos = self.window.get_cursor_pos()
         self.channel_to_paint = 0
+        self.val_to_paint = 0.1
 
 
     @ti.kernel
-    def add_one(self,
+    def add_val_to_loc(self,
+            val: ti.f32,
             pos_x: ti.f32,
             pos_y: ti.f32,
             radius: ti.i32,
@@ -57,7 +62,7 @@ class RGBVis(Visualization):
         offset = int(pos_x) * 3
         for i, j in ti.ndrange((-radius, radius), (-radius, radius)):
             if (i**2) + j**2 < radius**2:
-                mem[0, offset+channel_to_paint, (i + ind_x) % self.w, (j + ind_y) % self.h] +=1
+                mem[0, offset+channel_to_paint, (i + ind_x) % self.w, (j + ind_y) % self.h] += val
 
 
     @ti.kernel
@@ -68,6 +73,19 @@ class RGBVis(Visualization):
             for k in ti.static(range(3)):
                 chid = chindices[k]
                 self.image[i, j][k] = mem[0, chid, xind, yind]
+
+
+    def render_opt_window(self):
+        self.canvas.set_background_color((1, 1, 1))
+        opt_w = min(480 / self.img_w, self.img_w)
+        opt_h = min(120 / self.img_h, self.img_h * 2)
+        with self.gui.sub_window("Options", 0.05, 0.05, opt_w, opt_h) as sub_w:
+            self.channel_to_paint = sub_w.slider_int("Channel to Paint", self.channel_to_paint, 0, 2)
+            self.val_to_paint = sub_w.slider_float("Value to Paint", self.val_to_paint, 0.0, 1.0)
+            self.brush_radius = sub_w.slider_int("Brush Radius", self.brush_radius, 1, 200)
+            self.paused = sub_w.checkbox("Pause", self.paused)
+            self.perturbing_weights = sub_w.checkbox("Perturb Weights", self.perturbing_weights)
+            self.perturbation_strength = sub_w.slider_float("Perturbation Strength", self.perturbation_strength, 0.0, 5.0)
 
 
     def check_events(self):
@@ -83,24 +101,16 @@ class RGBVis(Visualization):
                 self.drawing = False
 
 
-    def render_opt_window(self):
-        self.canvas.set_background_color((1, 1, 1))
-        opt_w = min(480 / self.img_w, self.img_w)
-        opt_h = min(120 / self.img_h, self.img_h * 2)
-        with self.gui.sub_window("Options", 0.05, 0.05, opt_w, opt_h) as sub_w:
-            self.brush_radius = sub_w.slider_int("Brush Radius", self.brush_radius, 1, 200)
-            self.perturbation_strength = sub_w.slider_float("Perturbation Strength", self.perturbation_strength, 0.0, 5.0)
-            self.paused = sub_w.checkbox("Pause", self.paused)
-            self.perturbing_weights = sub_w.checkbox("Perturb Weights", self.perturbing_weights)
-            self.channel_to_paint = sub_w.slider_int("Channel to Paint", self.channel_to_paint, 0, 2)
-            
-
     def update(self):
+        current_time = time.time()
+        current_pos = self.window.get_cursor_pos()
         if not self.paused:
             self.check_events()
-            if self.drawing:
-                pos = self.window.get_cursor_pos()
-                self.add_one(pos[0], pos[1], self.brush_radius, self.channel_to_paint, self.world.mem)
+            if self.drawing and ((current_time - self.prev_time) > 0.1): # or (current_pos != self.prev_pos)):
+                self.add_val_to_loc(self.val_to_paint, current_pos[0], current_pos[1], self.brush_radius, self.channel_to_paint, self.world.mem)
+                self.prev_time = current_time  # Update the time of the last action
+                self.prev_pos = current_pos
+
             max_vals = torch.tensor([self.world.mem[0, ch].max() for ch in self.chindices])
             self.write_to_renderer(self.world.mem, max_vals, self.chindices)
         self.render_opt_window()

@@ -3,12 +3,12 @@ import taichi as ti
 import torch.nn as nn
 
 from ...dynamics.nn_lib import ch_norm
-from ...dynamics.Organism import Organism
+from ...dynamics.organism import Organism
 
 @ti.data_oriented
-class CoralOrganism(Organism):
-    def __init__(self, world, sensors, n_actuators, latent_size = None):
-        super(CoralOrganism, self).__init__(world, sensors, n_actuators)
+class MinimalOrganism(Organism):
+    def __init__(self, n_sensors, n_actuators, torch_device, latent_size = None):
+        super().__init__(n_sensors, n_actuators)
 
         if latent_size is None:
             latent_size = (self.n_sensors + self.n_actuators) // 2
@@ -21,7 +21,7 @@ class CoralOrganism(Organism):
             kernel_size=3,
             padding=1,
             padding_mode='circular',
-            device=self.world.torch_device,
+            device=torch_device,
             bias=False
         )
 
@@ -31,7 +31,7 @@ class CoralOrganism(Organism):
             kernel_size=3,
             padding=1,
             padding_mode='circular',
-            device=self.world.torch_device,
+            device=torch_device,
             bias=False
         )
 
@@ -41,7 +41,7 @@ class CoralOrganism(Organism):
             kernel_size=3,
             padding=1,
             padding_mode='circular',
-            device=self.world.torch_device,
+            device=torch_device,
             bias=False
         )
     
@@ -57,7 +57,12 @@ class CoralOrganism(Organism):
             x = ch_norm(x)
             x = torch.sigmoid(x)
 
-            return self.latent_conv_2(x)
+            x = self.latent_conv_2(x)
+            x = nn.ReLU()(x)
+            x = ch_norm(x)
+            x = torch.sigmoid(x)
+
+            return x
 
 
     def perturb_weights(self, perturbation_strength):
