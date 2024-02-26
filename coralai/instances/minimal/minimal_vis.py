@@ -14,6 +14,10 @@ class MinimalVis(Visualization):
     ):
         super(MinimalVis, self).__init__(substrate, chids, name, scale)
 
+        self.weight_mutate_rate = 0.8
+        self.weight_mutate_power = 0.5
+        self.bias_mutate_rate = 0.7
+
         if self.chindices.n != 1:
             raise ValueError("Vis: ch_cmaps must have 1 channel for black and white visualization")
 
@@ -27,6 +31,9 @@ class MinimalVis(Visualization):
             self.val_to_paint = sub_w.slider_float("Value to Paint", self.val_to_paint, 0.0, 1.0)
             self.brush_radius = sub_w.slider_int("Brush Radius", self.brush_radius, 1, 200)
             self.paused = sub_w.checkbox("Pause", self.paused)
-            self.perturbing_weights = sub_w.checkbox("Perturb Weights", self.perturbing_weights)
-            self.perturbation_strength = sub_w.slider_float("Perturbation Strength", self.perturbation_strength, 0.0, 5.0)
-       
+            self.mutate = sub_w.checkbox("Mutate", self.mutate)
+            
+            # Mutation parameter sliders
+            self.weight_mutate_rate = sub_w.slider_float("Weight Mutate Rate", self.weight_mutate_rate, 0.0, 1.0)
+            self.weight_mutate_power = sub_w.slider_float("Weight Mutate Power", self.weight_mutate_power, 0.0, 1.0)
+            self.bias_mutate_rate = sub_w.slider_float("Bias Mutate Rate", self.bias_mutate_rate, 0.0, 1.0)

@@ -3,6 +3,7 @@
 """
 
 import os
+from datetime import datetime
 
 import neat
 # import visualize
@@ -21,14 +22,33 @@ def eval_genomes(genomes, config):
             genome.fitness -= (output[0] - xo[0]) ** 2
 
 
-def run(config_file, output_dir='neat_output', checkpoint_dir='xor_checkpoints', checkpoint_prefix='neat_xor_checkpoint'):
+def run(config_filename='xor_neat.config', output_dir='neat_output', checkpoint_dir='xor_checkpoints', checkpoint_prefix='neat_xor_checkpoint_'):
+    # Determine path to configuration file. This path manipulation is
+    # here so that the script will run successfully regardless of the
+    # current working directory.
+    local_dir = os.path.dirname(__file__)
+    config_path = os.path.join(local_dir, config_filename)
+
+        # Format the current date and time
+    current_datetime = datetime.now().strftime("%y%m%d-%H%M_%S")
+
+    # Create a special directory for output files with current date and time
+    output_dir = os.path.join('neat_output', f'xor_{current_datetime}')
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Append checkpoints to the output directory
+    checkpoint_dir = os.path.join(output_dir, 'checkpoints')
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+
+
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     # Load configuration.
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                         config_file)
+                         config_path)
 
     # Create the population, which is the top-level object for a NEAT run.
     p = neat.Population(config)
@@ -71,9 +91,4 @@ def run(config_file, output_dir='neat_output', checkpoint_dir='xor_checkpoints',
 
 
 if __name__ == '__main__':
-    # Determine path to configuration file. This path manipulation is
-    # here so that the script will run successfully regardless of the
-    # current working directory.
-    local_dir = os.path.dirname(__file__)
-    config_path = os.path.join(local_dir, 'neat.config')
-    run(config_path)
+    run()

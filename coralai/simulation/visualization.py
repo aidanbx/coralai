@@ -40,7 +40,7 @@ class Visualization:
         self.gui = self.window.get_gui()
         self.paused = False
         self.brush_radius = 4
-        self.perturbing_weights = False
+        self.mutate = False
         self.perturbation_strength = 0.1
         self.drawing = False
         self.prev_time = time.time()
@@ -85,7 +85,7 @@ class Visualization:
             self.val_to_paint = sub_w.slider_float("Value to Paint", self.val_to_paint, 0.0, 1.0)
             self.brush_radius = sub_w.slider_int("Brush Radius", self.brush_radius, 1, 200)
             self.paused = sub_w.checkbox("Pause", self.paused)
-            self.perturbing_weights = sub_w.checkbox("Perturb Weights", self.perturbing_weights)
+            self.mutate = sub_w.checkbox("Perturb Weights", self.mutate)
             self.perturbation_strength = sub_w.slider_float("Perturbation Strength", self.perturbation_strength, 0.0, 5.0)
 
 

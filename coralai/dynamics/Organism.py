@@ -5,3 +5,6 @@ class Organism:
 
     def forward(self, x):
         return x
+    
+    def mutate(self):
+        return self
