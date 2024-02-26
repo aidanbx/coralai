@@ -30,6 +30,7 @@ class Visualization:
         self.scale = scale
         self.img_w = self.world.w * scale
         self.img_h = self.world.h * scale
+        self.n_channels = len(chindices)
         self.image = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.img_w, self.img_h))
 
         self.window = ti.ui.Window(
@@ -71,7 +72,7 @@ class Visualization:
             xind = (i//self.scale) % self.w
             yind = (j//self.scale) % self.h
             for k in ti.static(range(3)):
-                chid = chindices[k]
+                chid = chindices[k%self.n_channels]
                 self.image[i, j][k] = mem[0, chid, xind, yind]
 
 
