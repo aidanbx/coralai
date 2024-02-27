@@ -3,12 +3,12 @@ import taichi as ti
 import torch.nn as nn
 
 from ...dynamics.nn_lib import ch_norm
-from ...dynamics.organism import Organism
+from ...evolution.organism import Organism
 
 @ti.data_oriented
 class NCAOrganism(Organism):
-    def __init__(self, n_sensors, n_actuators, torch_device, latent_size = None):
-        super().__init__(n_sensors, n_actuators)
+    def __init__(self, substrate, sensors, n_actuators, torch_device, latent_size = None):
+        super().__init__(substrate, sensors, n_actuators)
 
         if latent_size is None:
             latent_size = (self.n_sensors + self.n_actuators) // 2

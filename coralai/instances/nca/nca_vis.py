@@ -13,7 +13,7 @@ class NCAVis(Visualization):
         scale: int = None,
     ):
         super(NCAVis, self).__init__(substrate, chids, name, scale)
-
+        self.perturbing_weights = False
         # if self.chindices.n != 3:
         #     raise ValueError("Vis: ch_cmaps must have 3 channels")
         

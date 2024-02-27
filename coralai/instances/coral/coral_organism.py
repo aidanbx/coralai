@@ -7,8 +7,8 @@ from ...dynamics.organism import Organism
 
 @ti.data_oriented
 class CoralOrganism(Organism):
-    def __init__(self, n_sensors, n_actuators, torch_device, latent_size = None):
-        super().__init__(n_sensors, n_actuators)
+    def __init__(self, substrate, sensors, n_actuators, torch_device, latent_size = None):
+        super().__init__(substrate, sensors, n_actuators)
 
         if latent_size is None:
             latent_size = (self.n_sensors + self.n_actuators) // 2
@@ -47,7 +47,7 @@ class CoralOrganism(Organism):
     
     def forward(self, x):
         with torch.no_grad():
-            x = self.conv(x)
+            x = self.conv(x[:, self.sensor_inds, :, :])
             x = nn.ReLU()(x)
             x = ch_norm(x)
             x = torch.sigmoid(x)

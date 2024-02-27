@@ -27,7 +27,7 @@ class CoralVis(Visualization):
             self.val_to_paint = sub_w.slider_float("Value to Paint", self.val_to_paint, 0.0, 1.0)
             self.brush_radius = sub_w.slider_int("Brush Radius", self.brush_radius, 1, 200)
             self.paused = sub_w.checkbox("Pause", self.paused)
-            self.perturbing_weights = sub_w.checkbox("Perturb Weights", self.perturbing_weights)
+            self.mutating = sub_w.checkbox("Perturb Weights", self.mutating)
             self.perturbation_strength = sub_w.slider_float("Perturbation Strength", self.perturbation_strength, 0.0, 5.0)
             sub_w.text("Channel Stats:")
             for channel_name in ['energy', 'infra']:

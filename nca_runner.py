@@ -2,7 +2,8 @@ import torch
 import taichi as ti
 from coralai.substrate.substrate import Substrate
 from coralai.instances.nca.nca_vis import NCAVis
-from coralai.instances.nca.nca_organism import NCAOrganism
+from coralai.instances.nca.nca_organism_torch import NCAOrganism
+# from coralai.instances.nca.nca_organism_rnn import NCAOrganism
 
 SHAPE = (400, 400)
 N_HIDDEN_CHANNELS = 8
@@ -24,13 +25,13 @@ def define_substrate(shape, n_hidden_channels):
     substrate.malloc()
     return substrate
 
+
 def define_organism(substrate):
-    sensors = ['rgb', 'hidden']
-    sensor_inds = substrate.windex[sensors]
-    n_sensors = len(sensor_inds)
-    return NCAOrganism(n_sensors = n_sensors,
-                            n_actuators = 3 + N_HIDDEN_CHANNELS, # invest, liquidate, explore, hidden
-                            torch_device = substrate.torch_device)
+    return NCAOrganism(substrate = substrate,
+                       sensors = ['rgb', 'hidden'],
+                       n_actuators = 3 + N_HIDDEN_CHANNELS,
+                       torch_device = substrate.torch_device)
+
 
 def main():
     substrate = define_substrate(SHAPE, N_HIDDEN_CHANNELS)

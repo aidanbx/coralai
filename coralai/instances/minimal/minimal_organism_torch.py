@@ -7,8 +7,8 @@ from ...dynamics.organism import Organism
 
 @ti.data_oriented
 class MinimalOrganism(Organism):
-    def __init__(self, n_sensors, n_actuators, torch_device):
-        super().__init__(n_sensors, n_actuators)
+    def __init__(self, substrate, sensors, n_actuators, torch_device):
+        super().__init__(substrate, sensors, n_actuators)
 
         # First convolutional layer
         self.conv = nn.Conv2d(
@@ -25,13 +25,13 @@ class MinimalOrganism(Organism):
     def forward(self, x):
         with torch.no_grad():
             x = self.conv(x)
-            x = nn.ReLU()(x)
             x = ch_norm(x)
+            x = nn.ReLU()(x)
             x = torch.sigmoid(x)
 
             return x
 
 
-    def perturb_weights(self, perturbation_strength):
+    def mutate(self, perturbation_strength):
         self.conv.weight.data += perturbation_strength * torch.randn_like(self.conv.weight.data)
         

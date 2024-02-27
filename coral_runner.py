@@ -32,7 +32,8 @@ sensors = ['energy', 'infra', 'last_move', 'com']
 sensor_inds = substrate.windex[sensors]
 n_sensors = len(sensor_inds)
 
-organism = CoralOrganism(n_sensors = n_sensors,
+organism = CoralOrganism(substrate = substrate,
+                         sensors = ['energy', 'infra', 'last_move', 'com'],
                          n_actuators = 1 + 1 + 1 + N_HIDDEN_CHANNELS, # invest, liquidate, explore, hidden
                          torch_device = substrate.torch_device)
 # organism = DumbOrg(world)
@@ -42,5 +43,5 @@ vis = CoralVis(substrate, ['energy', 'infra', 'last_move'])
 while vis.window.running:
     apply_actuators(substrate, organism.forward(substrate.mem))
     vis.update()
-    if vis.perturbing_weights:
+    if vis.mutating:
         organism.perturb_weights(vis.perturbation_strength)
