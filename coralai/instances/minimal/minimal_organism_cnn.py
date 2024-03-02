@@ -9,7 +9,8 @@ from ...evolution.organism import Organism
 class MinimalOrganismCNN(Organism):
     def __init__(self, substrate, kernel, sense_chs, act_chs, torch_device):
         super().__init__(substrate, kernel, sense_chs, act_chs, torch_device)
-
+        self.name = "MinimalOrganismCNN"
+        
         # First convolutional layer
         self.conv = nn.Conv2d(
             self.n_senses,

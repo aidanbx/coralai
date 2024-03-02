@@ -7,29 +7,29 @@ from .substrate import Substrate
 @ti.data_oriented
 class Visualization:
     def __init__(self,
-                 world: Substrate,
+                 substrate: Substrate,
                  chids: list,
                  name: str = None,
                  scale: int = None,):
-        self.world = world
-        self.w = world.w
-        self.h = world.h
+        self.substrate = substrate
+        self.w = substrate.w
+        self.h = substrate.h
         self.chids = chids
         self.name = "Vis" if name is None else name
         self.scale = 1 if scale is None else scale
 
-        chindices = self.world.get_inds_tivec(self.chids)
+        chindices = self.substrate.get_inds_tivec(self.chids)
 
         self.chindices = chindices
 
         if scale is None:
-            max_dim = max(self.world.w, self.world.h)
+            max_dim = max(self.substrate.w, self.substrate.h)
             desired_max_dim = 800
             scale = desired_max_dim // max_dim
             
         self.scale = scale
-        self.img_w = self.world.w * scale
-        self.img_h = self.world.h * scale
+        self.img_w = self.substrate.w * scale
+        self.img_h = self.substrate.h * scale
         self.n_channels = len(chindices)
         self.image = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.img_w, self.img_h))
 
@@ -96,7 +96,7 @@ class Visualization:
             if e.key == ti.ui.LMB and self.window.is_pressed(ti.ui.SHIFT):
                 self.drawing = True
             elif e.key == ti.ui.SPACE:
-                self.world.mem *= 0.0
+                self.substrate.mem *= 0.0
         for e in self.window.get_events(ti.ui.RELEASE):
             if e.key == ti.ui.LMB:
                 self.drawing = False
@@ -108,12 +108,12 @@ class Visualization:
         if not self.paused:
             self.check_events()
             if self.drawing and ((current_time - self.prev_time) > 0.1): # or (current_pos != self.prev_pos)):
-                self.add_val_to_loc(self.val_to_paint, current_pos[0], current_pos[1], self.brush_radius, self.channel_to_paint, self.world.mem)
+                self.add_val_to_loc(self.val_to_paint, current_pos[0], current_pos[1], self.brush_radius, self.channel_to_paint, self.substrate.mem)
                 self.prev_time = current_time  # Update the time of the last action
                 self.prev_pos = current_pos
 
-            max_vals = torch.tensor([self.world.mem[0, ch].max() for ch in self.chindices])
-            self.write_to_renderer(self.world.mem, max_vals, self.chindices)
+            max_vals = torch.tensor([self.substrate.mem[0, ch].max() for ch in self.chindices])
+            self.write_to_renderer(self.substrate.mem, max_vals, self.chindices)
         self.render_opt_window()
         self.canvas.set_image(self.image)
         self.window.show()

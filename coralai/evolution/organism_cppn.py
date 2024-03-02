@@ -8,6 +8,7 @@ from .evolvable_organism import EvolvableOrganism
 class OrganismCPPN(EvolvableOrganism):
     def __init__(self, config_path, substrate, kernel, sense_chs, act_chs, torch_device):
         super().__init__(config_path, substrate, kernel, sense_chs, act_chs, torch_device)
+        self.name = "OrganismCPPN"
 
         (self.leaf_names, self.node_names) = self.gen_leaf_node_names()
         self.net = None

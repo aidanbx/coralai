@@ -7,8 +7,9 @@ from coralai.substrate.substrate import Substrate
 from coralai.substrate.visualization import Visualization
 from coralai.evolution.organism_cppn import OrganismCPPN
 from coralai.instances.minimal.minimal_organism_cnn import MinimalOrganismCNN
+from coralai.instances.minimal.minimal_organism_hyper import MinimalOrganismHyper
+
 from coralai.evolution.evolvable_organism import EvolvableOrganism
-from coralai.evolution.run_things import run_cnn, run_evolvable
 
 
 def define_substrate(shape, torch_device):
@@ -48,14 +49,25 @@ def main():
     organism_cnn = MinimalOrganismCNN(substrate, kernel, sense_chs, act_chs, torch_device)
     organism_rnn = EvolvableOrganism(config_path,substrate, kernel, sense_chs, act_chs, torch_device)
     organism_cppn = OrganismCPPN(config_path, substrate, kernel, sense_chs, act_chs, torch_device)
-    organism = organism_rnn
+    organism_hyper = MinimalOrganismHyper(config_path, substrate, kernel, sense_chs, act_chs, torch_device)
+    organism = organism_hyper
     
-    organism.set_genome(genome_key, organism.gen_random_genome())
-    organism.create_torch_net()
+    if organism.is_evolvable:
+        organism.set_genome(genome_key, organism.gen_random_genome())
+        organism.create_torch_net()
     
-    # run_evolvable(vis, substrate, organism, genome_map)
-    run_cnn(vis, organism_cnn, substrate)
-
+    while vis.window.running:
+        if organism.is_evolvable:
+            organism.forward(substrate.mem, genome_map)
+        else:
+            organism.forward(substrate.mem)
+        vis.update()
+        if vis.mutating:
+            new_genome = organism.mutate(vis.perturbation_strength)
+            if organism.is_evolvable:
+                organism.set_genome(organism.genome_key, new_genome) # mutates all cells at once
+                organism.create_torch_net()
+            
 
 if __name__ == "__main__":
     main()

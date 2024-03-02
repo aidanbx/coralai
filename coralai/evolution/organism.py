@@ -13,6 +13,7 @@ class Organism:
         self.act_chs = act_chs
         self.act_chinds = substrate.windex[act_chs]
         self.n_acts = len(self.act_chinds)
+        self.is_evolvable = False
 
     def forward(self, x):
         return x

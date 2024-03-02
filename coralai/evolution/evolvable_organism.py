@@ -25,6 +25,7 @@ class EvolvableOrganism(Organism):
         self.genome = None
         self.genome_key = None
         self.net = None
+        self.is_evolvable = True
 
 
     def load_neat_config(self):
@@ -80,7 +81,7 @@ class EvolvableOrganism(Organism):
     def get_cell_coords(self, genome_map):
         matches = genome_map.eq(self.genome_key)
         coords = torch.where(matches)
-        combined_coords = torch.stack((coords[0], coords[1]), dim=1)
+        combined_coords = torch.stack((coords[0], coords[1]), dim=1).contiguous()
 
         return combined_coords
     
@@ -104,7 +105,7 @@ class EvolvableOrganism(Organism):
     @ti.kernel
     def store_actions(self, actions: ti.types.ndarray(), mem: ti.types.ndarray(), 
                       act_chinds: ti.types.ndarray(), cell_coords: ti.types.ndarray()):
-        for cell_n, act_n in ti.ndrange(cell_coords.shape[0], actions.shape[1]):
+        for cell_n, act_n in ti.ndrange(cell_coords.shape[0], act_chinds.shape[0]):
             mem[0, act_chinds[act_n], cell_coords[cell_n, 0], cell_coords[cell_n, 1]] = actions[cell_n, act_n]
 
 
@@ -114,7 +115,7 @@ class EvolvableOrganism(Organism):
 
     def forward(self, mem, genome_map):
       
-        mem = mem + torch.randn_like(mem) * 0.1
+        # mem += torch.randn_like(mem) * 0.1
 
         cell_coords = self.get_cell_coords(genome_map)
         n_cells = cell_coords.shape[0]
@@ -126,7 +127,7 @@ class EvolvableOrganism(Organism):
         actions = self.activate(sensor_mem).contiguous()
 
         self.store_actions(actions, mem, self.act_chinds, cell_coords)
-        mem[:, self.act_chinds] = nn.ReLU()(mem[:, self.act_chinds])
+        # mem[:, self.act_chinds] = nn.ReLU()(mem[:, self.act_chinds])
         mem[:, self.act_chinds] = ch_norm(mem[:, self.act_chinds])
         mem[:, self.act_chinds] = torch.sigmoid(mem[:, self.act_chinds])
         

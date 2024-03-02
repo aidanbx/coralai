@@ -9,7 +9,7 @@ from ...evolution.organism import Organism
 class CoralOrganism(Organism):
     def __init__(self, substrate, kernel, sense_chs, act_chs, torch_device):
         super().__init__(substrate, kernel, sense_chs, act_chs, torch_device)
-
+        self.name = "CoralOrganism"
         latent_size = (self.n_senses + self.n_acts) // 2
         self.latent_size = latent_size
 
