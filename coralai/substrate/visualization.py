@@ -1,7 +1,7 @@
 import time
 import torch
 import taichi as ti
-from ..substrate.substrate import Substrate
+from .substrate import Substrate
 
 
 @ti.data_oriented

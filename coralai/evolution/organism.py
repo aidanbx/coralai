@@ -1,10 +1,18 @@
+import torch
+
 class Organism:
-    def __init__(self, substrate, sensors, n_actuators):
+    def __init__(self, substrate, kernel, sense_chs, act_chs, torch_device):
         self.substrate = substrate
-        self.sensors = sensors
-        self.sensor_inds = substrate.windex[sensors]
-        self.n_sensors = len(self.sensor_inds)
-        self.n_actuators = n_actuators
+        self.kernel = torch.tensor(kernel, device=torch_device)
+        self.torch_device = torch_device
+        
+        self.sense_chs = sense_chs
+        self.sense_chinds = substrate.windex[sense_chs]
+        self.n_senses = len(self.sense_chinds)
+
+        self.act_chs = act_chs
+        self.act_chinds = substrate.windex[act_chs]
+        self.n_acts = len(self.act_chinds)
 
     def forward(self, x):
         return x

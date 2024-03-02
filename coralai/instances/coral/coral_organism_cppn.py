@@ -2,8 +2,8 @@ import torch
 import taichi as ti
 import torch.nn as nn
 
-from ...dynamics.nn_lib import ch_norm
-from ...dynamics.organism import Organism
+from ...substrate.nn_lib import ch_norm
+from ...evolution.organism import Organism
 
 @ti.data_oriented
 class CoralOrganism(Organism):

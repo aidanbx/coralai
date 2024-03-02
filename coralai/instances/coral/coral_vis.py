@@ -1,6 +1,6 @@
 import taichi as ti
 from ...substrate.substrate import Substrate
-from ...simulation.visualization import Visualization
+from ...substrate.visualization import Visualization
 
 
 @ti.data_oriented
@@ -29,12 +29,12 @@ class CoralVis(Visualization):
             self.paused = sub_w.checkbox("Pause", self.paused)
             self.mutating = sub_w.checkbox("Perturb Weights", self.mutating)
             self.perturbation_strength = sub_w.slider_float("Perturbation Strength", self.perturbation_strength, 0.0, 5.0)
-            sub_w.text("Channel Stats:")
-            for channel_name in ['energy', 'infra']:
-                chindex = self.world.windex[channel_name]
-                max_val = self.world.mem[0, chindex].max()
-                min_val = self.world.mem[0, chindex].min()
-                avg_val = self.world.mem[0, chindex].mean()
-                sum_val = self.world.mem[0, chindex].sum()
-                sub_w.text(f"{channel_name}: Max: {max_val:.2f}, Min: {min_val:.2f}, Avg: {avg_val:.2f}, Sum: {sum_val:.2f}")
+            # sub_w.text("Channel Stats:")
+            # for channel_name in ['energy', 'infra']:
+            #     chindex = self.world.windex[channel_name]
+            #     max_val = self.world.mem[0, chindex].max()
+            #     min_val = self.world.mem[0, chindex].min()
+            #     avg_val = self.world.mem[0, chindex].mean()
+            #     sum_val = self.world.mem[0, chindex].sum()
+            #     sub_w.text(f"{channel_name}: Max: {max_val:.2f}, Min: {min_val:.2f}, Avg: {avg_val:.2f}, Sum: {sum_val:.2f}")
                 

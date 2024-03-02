@@ -2,18 +2,18 @@ import torch
 import taichi as ti
 import torch.nn as nn
 
-from ...dynamics.nn_lib import ch_norm
-from ...dynamics.organism import Organism
+from ...substrate.nn_lib import ch_norm
+from ...evolution.organism import Organism
 
 @ti.data_oriented
-class MinimalOrganism(Organism):
-    def __init__(self, substrate, sensors, n_actuators, torch_device):
-        super().__init__(substrate, sensors, n_actuators)
+class MinimalOrganismCNN(Organism):
+    def __init__(self, substrate, kernel, sense_chs, act_chs, torch_device):
+        super().__init__(substrate, kernel, sense_chs, act_chs, torch_device)
 
         # First convolutional layer
         self.conv = nn.Conv2d(
-            self.n_sensors,
-            self.n_actuators,
+            self.n_senses,
+            self.n_acts,
             kernel_size=3,
             padding=1,
             padding_mode='circular',
@@ -29,9 +29,10 @@ class MinimalOrganism(Organism):
             x = nn.ReLU()(x)
             x = torch.sigmoid(x)
 
-            return x
+            self.substrate.mem[self.act_chinds] = x
+            # return x
 
 
     def mutate(self, perturbation_strength):
         self.conv.weight.data += perturbation_strength * torch.randn_like(self.conv.weight.data)
-        
+    

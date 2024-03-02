@@ -1,22 +1,17 @@
 import os
 import torch
-import neat
 
 import taichi as ti
-import configparser
-from datetime import datetime
-
 
 from coralai.substrate.substrate import Substrate
-from coralai.instances.minimal.minimal_vis import MinimalVis
-# from coralai.instances.minimal.minimal_organism_torch import MinimalOrganism
-from coralai.instances.minimal.minimal_organism_rnn import MinimalOrganism
+from coralai.substrate.visualization import Visualization
+from coralai.evolution.organism_cppn import OrganismCPPN
+from coralai.instances.minimal.minimal_organism_cnn import MinimalOrganismCNN
+from coralai.evolution.evolvable_organism import EvolvableOrganism
+from coralai.evolution.run_things import run_cnn, run_evolvable
 
-SHAPE = (256, 256)
-torch_device = torch.device("mps")
-ti.init(ti.metal)
 
-def define_substrate(shape):
+def define_substrate(shape, torch_device):
     substrate = Substrate(
         shape=shape,
         torch_dtype=torch.float32,
@@ -29,37 +24,37 @@ def define_substrate(shape):
     return substrate
 
 
-def define_organism(substrate):
-    config_filename = "./coralai/instances/minimal/minimal_neat.config"
-    local_dir = os.path.dirname(__file__)
+def main():
+    shape = (256, 256)
+    torch_device = torch.device("mps")
+    ti.init(ti.metal)
+
+    local_dir = os.path.dirname(os.path.abspath(__file__))
+    config_filename = "coralai/instances/minimal/minimal_neat.config"
     config_path = os.path.join(local_dir, config_filename)
 
-    neat_config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
-                    neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                    config_path)
+    substrate = define_substrate(shape, torch_device)
+    kernel = [[-1,-1],[0,-1],[1,-1],
+              [-1, 0],[0, 0],[1, 0],
+              [-1, 1],[0, 1],[1, 1]]
     
-    return MinimalOrganism(neat_config,
-                           substrate,
-                           sensors = ['bw'],
-                           n_actuators = 1,
-                           torch_device = substrate.torch_device)
-
-
-def main():
-    substrate = define_substrate(SHAPE)
-    organism = define_organism(substrate)
-    vis = MinimalVis(substrate, ["bw"])
-
+    sense_chs = ['bw']
+    act_chs = ['bw']
+    
     genome_key = 0
-    genome_map = torch.zeros(SHAPE[0], SHAPE[1], dtype=torch.int32, device=torch_device)
-    organism.set_genome(genome_key=genome_key)
-    while vis.window.running:
-        substrate.mem = organism.forward(substrate.mem, genome_map)
-        vis.update()
-        if vis.mutating:
-            new_genome = organism.mutate(vis.perturbation_strength)
-            organism.set_genome(genome_key, new_genome)
-            # print(new_genome)
+    genome_map = torch.zeros(shape[0], shape[1], dtype=torch.int32, device=torch_device)
+    vis = Visualization(substrate, ["bw"])
+
+    organism_cnn = MinimalOrganismCNN(substrate, kernel, sense_chs, act_chs, torch_device)
+    organism_rnn = EvolvableOrganism(config_path,substrate, kernel, sense_chs, act_chs, torch_device)
+    organism_cppn = OrganismCPPN(config_path, substrate, kernel, sense_chs, act_chs, torch_device)
+    organism = organism_rnn
+    
+    organism.set_genome(genome_key, organism.gen_random_genome())
+    organism.create_torch_net()
+    
+    # run_evolvable(vis, substrate, organism, genome_map)
+    run_cnn(vis, organism_cnn, substrate)
 
 
 if __name__ == "__main__":

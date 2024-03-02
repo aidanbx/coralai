@@ -1,18 +1,14 @@
+import os
 import torch
 import taichi as ti
 from coralai.substrate.substrate import Substrate
 from coralai.instances.coral.coral_physics import apply_actuators
 from coralai.instances.coral.coral_vis import CoralVis
 from coralai.instances.coral.coral_organism import CoralOrganism
-
-SHAPE = (400, 400)
-N_HIDDEN_CHANNELS = 8
+from coralai.evolution.run_things import run_cnn, run_evolvable
 
 
-def define_substrate(shape, n_hidden_channels):
-    ti.init(ti.metal)
-    torch_device = torch.device("mps")
-
+def define_substrate(shape, n_hidden_channels, torch_device):
     substrate = Substrate(
         shape=shape,
         torch_dtype=torch.float32,
@@ -21,27 +17,46 @@ def define_substrate(shape, n_hidden_channels):
             "energy": ti.f32,
             "infra": ti.f32,
             "last_move": ti.f32,
+            "invest_act": ti.f32,
+            "liquidate_act": ti.f32,
+            "explore_act": ti.f32,
             "com": ti.types.vector(n=n_hidden_channels, dtype=ti.f32),
         },
     )
     substrate.malloc()
     return substrate
 
-substrate = define_substrate(SHAPE, N_HIDDEN_CHANNELS)
-sensors = ['energy', 'infra', 'last_move', 'com']
-sensor_inds = substrate.windex[sensors]
-n_sensors = len(sensor_inds)
 
-organism = CoralOrganism(substrate = substrate,
-                         sensors = ['energy', 'infra', 'last_move', 'com'],
-                         n_actuators = 1 + 1 + 1 + N_HIDDEN_CHANNELS, # invest, liquidate, explore, hidden
-                         torch_device = substrate.torch_device)
-# organism = DumbOrg(world)
+def main():
+    shape = (400, 400)
+    n_hidden_channels = 8
+    ti.init(ti.metal)
+    torch_device = torch.device("mps")
 
-vis = CoralVis(substrate, ['energy', 'infra', 'last_move'])
+    local_dir = os.path.dirname(os.path.abspath(__file__))
+    config_filename = "coralai/instances/coral/coral_neat.config"
+    config_path = os.path.join(local_dir, config_filename)
 
-while vis.window.running:
-    apply_actuators(substrate, organism.forward(substrate.mem))
-    vis.update()
-    if vis.mutating:
-        organism.perturb_weights(vis.perturbation_strength)
+    substrate = define_substrate(shape, n_hidden_channels, torch_device)
+    kernel = [[-1,-1],[0,-1],[1,-1],
+              [-1, 0],[0, 0],[1, 0],
+              [-1, 1],[0, 1],[1, 1]]
+    
+    sense_chs = ['energy', 'infra', 'last_move', 'com']
+    act_chs = ['invest_act', 'liquidate_act', 'explore_act', 'com']
+
+    genome_key = 0
+    genome_map = torch.zeros(shape[0], shape[1], dtype=torch.int32, device=torch_device)
+    
+    organism = CoralOrganism(substrate, kernel, sense_chs, act_chs, torch_device)
+    vis = CoralVis(substrate, ['energy', 'infra', 'last_move'])
+
+    while vis.window.running:
+        apply_actuators(substrate, organism.forward(substrate.mem))
+
+        vis.update()
+        if vis.mutating:
+            organism.mutate(vis.perturbation_strength)
+
+if __name__ == "__main__":
+    main()

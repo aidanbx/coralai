@@ -2,7 +2,7 @@ import torch
 import taichi as ti
 import torch.nn as nn
 
-from ...dynamics.nn_lib import ch_norm
+from ...substrate.nn_lib import ch_norm
 
 LIQUIDATE_IDX = 0
 INVEST_IDX = 1
