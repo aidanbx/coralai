@@ -9,10 +9,10 @@ from datetime import datetime
 from pytorch_neat.activations import relu_activation, sigmoid_activation, tanh_activation
 from pytorch_neat.adaptive_linear_net import AdaptiveLinearNet
 from pytorch_neat.adaptive_net import AdaptiveNet
-from ...evolution.evolvable_organism import EvolvableOrganism
+from ...evolution.neat_organism import NeatOrganism
 
 @ti.data_oriented
-class MinimalOrganismHyper(EvolvableOrganism):
+class MinimalOrganismHyper(NeatOrganism):
     def __init__(self, neat_config_path, substrate, kernel, sense_chs, act_chs, torch_device):
         super().__init__(neat_config_path, substrate, kernel, sense_chs, act_chs, torch_device)
         self.name = "Minimal_HyperNEAT"

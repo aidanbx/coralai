@@ -63,7 +63,7 @@ class Visualization:
         offset = int(pos_x) * 3
         for i, j in ti.ndrange((-radius, radius), (-radius, radius)):
             if (i**2) + j**2 < radius**2:
-                mem[0, offset+channel_to_paint, (i + ind_x) % self.w, (j + ind_y) % self.h] += val
+                mem[0, channel_to_paint, (i + ind_x) % self.w, (j + ind_y) % self.h] += val
 
 
     @ti.kernel
@@ -75,18 +75,20 @@ class Visualization:
                 chid = chindices[k%self.n_channels]
                 self.image[i, j][k] = mem[0, chid, xind, yind]
 
+    def opt_window(self, sub_w):
+        self.channel_to_paint = sub_w.slider_int("Channel to Paint", self.channel_to_paint, 0, 2)
+        self.val_to_paint = sub_w.slider_float("Value to Paint", self.val_to_paint, 0.0, 1.0)
+        self.brush_radius = sub_w.slider_int("Brush Radius", self.brush_radius, 1, 200)
+        self.paused = sub_w.checkbox("Pause", self.paused)
+        self.mutating = sub_w.checkbox("Perturb Weights", self.mutating)
+        self.perturbation_strength = sub_w.slider_float("Perturbation Strength", self.perturbation_strength, 0.0, 5.0)
 
     def render_opt_window(self):
         self.canvas.set_background_color((1, 1, 1))
         opt_w = min(480 / self.img_w, self.img_w)
         opt_h = min(240 / self.img_h, self.img_h * 2)
         with self.gui.sub_window("Options", 0.05, 0.05, opt_w, opt_h) as sub_w:
-            self.channel_to_paint = sub_w.slider_int("Channel to Paint", self.channel_to_paint, 0, 2)
-            self.val_to_paint = sub_w.slider_float("Value to Paint", self.val_to_paint, 0.0, 1.0)
-            self.brush_radius = sub_w.slider_int("Brush Radius", self.brush_radius, 1, 200)
-            self.paused = sub_w.checkbox("Pause", self.paused)
-            self.mutating = sub_w.checkbox("Perturb Weights", self.mutating)
-            self.perturbation_strength = sub_w.slider_float("Perturbation Strength", self.perturbation_strength, 0.0, 5.0)
+            self.opt_window(sub_w)
 
 
     def check_events(self):

@@ -9,12 +9,12 @@ import torch.nn as nn
 # from pytorch_neat.cppn import create_cppn
 from pytorch_neat.activations import relu_activation, sigmoid_activation, tanh_activation, identity_activation
 from pytorch_neat.linear_net import LinearNet
-from ...evolution.evolvable_organism import EvolvableOrganism
+from ...evolution.neat_organism import NeatOrganism
 from ...substrate.nn_lib import ch_norm
 
 
 @ti.data_oriented
-class NCAOrganismHyper(EvolvableOrganism):
+class NCAOrganismHyper(NeatOrganism):
     def __init__(self, neat_config_path, substrate, kernel, sense_chs, act_chs, torch_device):
         super().__init__(neat_config_path, substrate, kernel, sense_chs, act_chs, torch_device)
         self.name = "NCA_HyperNEAT"

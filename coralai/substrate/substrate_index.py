@@ -1,6 +1,14 @@
 import numpy as np
 
 class SubstrateIndex:
+    """
+    Returns indices of substrate channels in queried order.
+    Usage:
+    - substrate.windex['red'] (returns: [0])
+    - substrate.windex[['energy', 'infra']] (returns: [0,1])
+    - substrate.windex['rgb'] (returns: [1,2,3]) assuming rgb is a taichi vector or struct
+    - substrate.windex[('acts', ['invest', 'liquidate'])] (returns: [4, 3]) assuming acts is a taichi struct
+    """
     def __init__(self, index_tree):
         self.index_tree = index_tree
 

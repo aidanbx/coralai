@@ -5,11 +5,11 @@ import taichi as ti
 
 from coralai.substrate.substrate import Substrate
 from coralai.substrate.visualization import Visualization
-from coralai.evolution.organism_cppn import OrganismCPPN
+from coralai.evolution.cppn_organism import CPPNOrganism
 from coralai.instances.minimal.minimal_organism_cnn import MinimalOrganismCNN
 from coralai.instances.minimal.minimal_organism_hyper import MinimalOrganismHyper
 
-from coralai.evolution.evolvable_organism import EvolvableOrganism
+from coralai.evolution.neat_organism import NeatOrganism
 
 
 def define_substrate(shape, torch_device):
@@ -47,8 +47,8 @@ def main():
     vis = Visualization(substrate, ["bw"])
 
     organism_cnn = MinimalOrganismCNN(substrate, kernel, sense_chs, act_chs, torch_device)
-    organism_rnn = EvolvableOrganism(config_path,substrate, kernel, sense_chs, act_chs, torch_device)
-    organism_cppn = OrganismCPPN(config_path, substrate, kernel, sense_chs, act_chs, torch_device)
+    organism_rnn = NeatOrganism(config_path,substrate, kernel, sense_chs, act_chs, torch_device)
+    organism_cppn = CPPNOrganism(config_path, substrate, kernel, sense_chs, act_chs, torch_device)
     organism_hyper = MinimalOrganismHyper(config_path, substrate, kernel, sense_chs, act_chs, torch_device)
     organism = organism_hyper
     
