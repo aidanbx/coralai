@@ -4,13 +4,9 @@ import neat
 import taichi as ti
 import configparser
 from datetime import datetime
-import torch.nn as nn
 
-# from pytorch_neat.cppn import create_cppn
-from pytorch_neat.activations import relu_activation, sigmoid_activation, tanh_activation, identity_activation
 from pytorch_neat.linear_net import LinearNet
 from ...evolution.neat_organism import NeatOrganism
-from ...substrate.nn_lib import ch_norm
 
 
 @ti.data_oriented
@@ -88,9 +84,10 @@ class CoralHyperOrganism(NeatOrganism):
 
 
     @ti.kernel
-    def apply_weights_and_biases(self, mem: ti.types.ndarray(), cell_coords: ti.types.ndarray(),
-                                kernel: ti.types.ndarray(), sense_chinds: ti.types.ndarray(), act_chinds: ti.types.ndarray(),
-                                weights: ti.types.ndarray(), biases: ti.types.ndarray()):
+    def apply_weights_and_biases(self, mem: ti.types.ndarray(), out_mem: ti.types.ndarray(),
+                                 cell_coords: ti.types.ndarray(),
+                                 kernel: ti.types.ndarray(), sense_chinds: ti.types.ndarray(), act_chinds: ti.types.ndarray(),
+                                 weights: ti.types.ndarray(), biases: ti.types.ndarray()):
         for cell_i, act_j in ti.ndrange(cell_coords.shape[0], act_chinds.shape[0]):
             val = 0.0
             center_x = cell_coords[cell_i, 0]
@@ -100,10 +97,10 @@ class CoralHyperOrganism(NeatOrganism):
                 neigh_y = (center_y + kernel[off_m, 1]) % mem.shape[3]
                 val += mem[0, sense_chinds[sensor_n], neigh_x, neigh_y] * weights[0, act_j, sensor_n]
             # This is okay because actuators are independent of sensors
-            mem[0, act_chinds[act_j], center_x, center_y] = val + biases[0, act_j, 0]
+            out_mem[0, act_chinds[act_j], center_x, center_y] = val + biases[0, act_j, 0]
 
 
-    def forward(self):
+    def forward(self, genome_map = None):
         """
         input: (w,h) where each value corresponds to a genome key
 
@@ -111,9 +108,15 @@ class CoralHyperOrganism(NeatOrganism):
         """
         with torch.no_grad():
             inds = self.substrate.ti_indices[None]
-            self.substrate.mem += torch.randn_like(self.substrate.mem) * 0.1
-            cell_coords = self.get_cell_coords(self.substrate[0, inds.genomes])
-            self.apply_weights_and_biases(self.substrate.mem, cell_coords,
+            if genome_map is None: 
+                genome_map = self.substrate.mem[0, inds.genome]
+            cell_coords = self.get_cell_coords(genome_map)
+            if cell_coords.shape[0] == 0:
+                return
+            out_mem = torch.zeros_like(self.substrate.mem[0, self.act_chinds])
+            # self.substrate.mem[0,inds.com] += torch.randn_like(self.substrate.mem[0,inds.com]) * 0.01
+            # self.substrate.mem[0,inds.com] = torch.clamp(self.substrate.mem[0,inds.com], 0, 1)
+            self.apply_weights_and_biases(self.substrate.mem, out_mem, cell_coords,
                       self.kernel, self.sense_chinds, self.act_chinds,
                       self.net.weights, self.net.biases)
-
+            self.substrate.mem = out_mem

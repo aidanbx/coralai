@@ -27,6 +27,9 @@ class Substrate:
         self.ti_indices = -1
         self.ti_lims = -1
 
+    def index_to_chname(self, index):
+        return self.windex.index_to_chname(index)
+
 
     def add_channel(self, chid: str, ti_dtype=ti.f32, **kwargs):
         if self.mem is not None:

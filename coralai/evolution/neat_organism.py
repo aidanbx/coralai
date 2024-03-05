@@ -54,16 +54,13 @@ class NeatOrganism(Organism):
     def set_genome(self, genome_key, genome=None):
         self.genome_key = genome_key
         if genome is None:
-            self.genome = self.gen_random_genome()
+            self.genome = self.gen_random_genome(genome_key)
         else:
             self.genome = genome
 
 
-    def gen_random_genome(self):
-        # Create a new genome with a unique UUID
-        genome_id = uuid.uuid4()
-        genome = neat.DefaultGenome(str(genome_id))
-        
+    def gen_random_genome(self, genome_key):
+        genome = neat.DefaultGenome(str(genome_key))
         # Initialize the new genome with the configuration settings
         genome.configure_new(self.neat_config.genome_config)
         
@@ -81,6 +78,8 @@ class NeatOrganism(Organism):
     def get_cell_coords(self, genome_map):
         matches = genome_map.eq(self.genome_key)
         coords = torch.where(matches)
+        if coords[0].shape[0] != 0:
+            pass
         combined_coords = torch.stack((coords[0], coords[1]), dim=1).contiguous()
 
         return combined_coords
@@ -134,7 +133,7 @@ class NeatOrganism(Organism):
         return mem
 
 
-    def mutate(self, rate):
+    def mutate(self):
         cloned_genome = copy.deepcopy(self.genome)
         cloned_genome.mutate(self.neat_config.genome_config)
         return cloned_genome

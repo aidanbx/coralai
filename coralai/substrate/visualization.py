@@ -15,10 +15,10 @@ class Visualization:
         self.w = substrate.w
         self.h = substrate.h
         self.chids = chids
-        self.name = "Vis" if name is None else name
         self.scale = 1 if scale is None else scale
 
         chindices = self.substrate.get_inds_tivec(self.chids)
+        self.name = f"Vis: {[self.substrate.index_to_chname(chindices[i]) for i in range(len(chindices))]}" if name is None else name
 
         self.chindices = chindices
 
@@ -76,8 +76,11 @@ class Visualization:
                 self.image[i, j][k] = mem[0, chid, xind, yind]
 
     def opt_window(self, sub_w):
-        self.channel_to_paint = sub_w.slider_int("Channel to Paint", self.channel_to_paint, 0, 2)
-        self.val_to_paint = sub_w.slider_float("Value to Paint", self.val_to_paint, 0.0, 1.0)
+        self.channel_to_paint = sub_w.slider_int("Paint channel: " +
+                                                 f"{self.substrate.index_to_chname(self.channel_to_paint)}",
+                                                 self.channel_to_paint, 0, 10)
+        self.val_to_paint = sub_w.slider_float("Value to Paint", self.val_to_paint, -1.0, 1.0)
+        self.val_to_paint = round(self.val_to_paint * 10) / 10
         self.brush_radius = sub_w.slider_int("Brush Radius", self.brush_radius, 1, 200)
         self.paused = sub_w.checkbox("Pause", self.paused)
         self.mutating = sub_w.checkbox("Perturb Weights", self.mutating)

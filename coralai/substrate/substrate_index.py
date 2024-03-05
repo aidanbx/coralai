@@ -12,6 +12,18 @@ class SubstrateIndex:
     def __init__(self, index_tree):
         self.index_tree = index_tree
 
+    def index_to_chname(self, index):
+        for channel, details in self.index_tree.items():
+            if index in details['indices']:
+                if 'subchannels' in details:
+                    for subchannel, subdetails in details['subchannels'].items():
+                        if index in subdetails['indices']:
+                            return f"{channel}_{subchannel}"
+                    return "err??"
+                else:
+                    return channel
+        return "Ch not found"
+
     def _get_tuple_indices(self, key_tuple):
         chid = key_tuple[0]
         subchid = key_tuple[1]

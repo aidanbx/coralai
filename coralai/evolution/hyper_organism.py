@@ -89,9 +89,9 @@ class HyperOrganism(NeatOrganism):
 
     @ti.kernel
     def apply_weights_and_biases(self, mem: ti.types.ndarray(), out_mem: ti.types.ndarray(), cell_coords: ti.types.ndarray(),
-                                kernel: ti.types.ndarray(), sense_chinds: ti.types.ndarray(), act_chinds: ti.types.ndarray(),
+                                kernel: ti.types.ndarray(), sense_chinds: ti.types.ndarray(),
                                 weights: ti.types.ndarray(), biases: ti.types.ndarray()):
-        for cell_i, act_j in ti.ndrange(cell_coords.shape[0], act_chinds.shape[0]):
+        for cell_i, act_j in ti.ndrange(cell_coords.shape[0], out_mem.shape[0]):
             val = 0.0
             center_x = cell_coords[cell_i, 0]
             center_y = cell_coords[cell_i, 1]
@@ -99,23 +99,30 @@ class HyperOrganism(NeatOrganism):
                 neigh_x = (center_x + kernel[off_m, 0]) % mem.shape[2]
                 neigh_y = (center_y + kernel[off_m, 1]) % mem.shape[3]
                 val += mem[0, sense_chinds[sensor_n], neigh_x, neigh_y] * weights[0, act_j, sensor_n]
-            out_mem[0, act_chinds[act_j], center_x, center_y] = val + biases[0, act_j, 0]
+            out_mem[act_j, center_x, center_y] = val + biases[0, act_j, 0]
 
 
-    def forward(self, mem, genome_map):
+    def forward(self, genome_map):
         with torch.no_grad():
-            mem += torch.randn_like(mem) * 0.1
+            inds = self.substrate.ti_indices[None]
+
+            if genome_map is None: 
+                if 'genome' in self.substrate.channels:
+                    genome_map = self.substrate.mem[0, inds.genome]
+                else:
+                    raise ValueError("hyper_organism: No genome map provided and no genome channel in substrate")
+            
             cell_coords = self.get_cell_coords(genome_map)
-            out_mem = torch.zeros_like(mem)
+            if cell_coords.shape[0] == 0:
+                return
+            
+            mem = self.substrate.mem
+            cell_coords = self.get_cell_coords(genome_map)
+
+            out_mem = torch.zeros_like(self.substrate.mem[0, self.act_chinds])
+
             self.apply_weights_and_biases(mem, out_mem, cell_coords,
-                      self.kernel, self.sense_chinds, self.act_chinds,
+                      self.kernel, self.sense_chinds,
                       self.net.weights, self.net.biases)
-            mem = nn.ReLU()(out_mem)
-            # Calculate the mean across batch and channel dimensions
-            mean = mem.mean(dim=(0, 2, 3), keepdim=True)
-            # Calculate the variance across batch and channel dimensions
-            var = mem.var(dim=(0, 2, 3), keepdim=True, unbiased=False)
-            # Normalize the input tensor
-            mem.sub_(mean).div_(torch.sqrt(var + 1e-5))
-            mem = torch.sigmoid(mem)
-            self.substrate.mem = mem
+            
+            return out_mem

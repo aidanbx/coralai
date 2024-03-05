@@ -14,10 +14,10 @@ from ...substrate.nn_lib import ch_norm
 
 
 @ti.data_oriented
-class NCAOrganismHyper(NeatOrganism):
+class CoralHyperOrganism(NeatOrganism):
     def __init__(self, neat_config_path, substrate, kernel, sense_chs, act_chs, torch_device):
         super().__init__(neat_config_path, substrate, kernel, sense_chs, act_chs, torch_device)
-        self.name = "NCA_HyperNEAT"
+        self.name = "Coral_Hyper_Organism"
         self.net = None
         self.neat_config = self.load_neat_config()
         self.w = self.substrate.w
@@ -86,66 +86,12 @@ class NCAOrganismHyper(NeatOrganism):
         )
         return self.net
 
-    # @ti.kernel
-    # def mm_weights(self, mem: ti.types.ndarray(), weights: ti.types.ndarray(),
-    #              cell_coords: ti.types.ndarray(), kernel: ti.types.ndarray(),
-    #              sense_chinds: ti.types.ndarray(), act_chinds: ti.types.ndarray()):
-    #     for cell_i, neigh_i, sense_i, act_i in ti.ndrange(cell_coords.shape[0], kernel.shape[0],
-    #                                                     sense_chinds.shape[0], act_chinds.shape[0]):
-    #         center_x = cell_coords[cell_i, 0]
-    #         center_y = cell_coords[cell_i, 1]
-    #         neigh_x = center_x + kernel[neigh_i, 0]
-    #         neigh_y = center_y + kernel[neigh_i, 1]
-    #         sensor_val = mem[0, sense_chinds[sense_i], neigh_x, neigh_y]
-    #         weight_val = weights[0, act_chinds[act_i], sense_chinds[sense_i]]
-    #         mem[0, act_chinds[act_i], center_x, center_y] += weight_val * sensor_val
-
-    # @ti.kernel
-    # def add_bias(self, mem: ti.types.ndarray(), bias: ti.types.ndarray(),
-    #              act_chinds: ti.types.ndarray(), cell_coords: ti.types.ndarray()):
-    #     for cell_i, act_i in ti.ndrange(cell_coords.shape[0], act_chinds.shape[0]):
-    #         center_x = cell_coords[cell_i, 0]
-    #         center_y = cell_coords[cell_i, 1]
-    #         mem[0, act_chinds[act_i], center_x, center_y] += bias[0, act_chinds[act_i], 0]
-
-    
-    # @ti.kernel
-    # def mm_weights(self, mem: ti.types.ndarray(), weights: ti.types.ndarray(), biases: ti.types.ndarray(),
-    #              cell_coords: ti.types.ndarray(), kernel: ti.types.ndarray(),
-    #              sense_chinds: ti.types.ndarray(), act_chinds: ti.types.ndarray()):
-    #     for c, k in ti.ndrange(cell_coords.shape[0], act_chinds.shape[0]):
-    #         i = cell_coords[c,0]
-    #         j = cell_coords[c,1]
-    #         mem[0,k,i,j] = mem[0,k,(i+1)%mem.shape[2],j]
-
-        # for cell_i, act_j in ti.ndrange(cell_coords.shape[0], act_chinds.shape[0]):
-        #     center_x = cell_coords[cell_i, 0]
-        #     center_y = cell_coords[cell_i, 1]
-        #     center_val = mem[0, act_chinds[act_j], center_x, center_y]
-        #     left_val = mem[0, act_chinds[act_j], (center_x-1)%mem.shape[2], center_y]
-        #     # for off_x, off_y in ti.ndrange((-1,2), (-1,2)):
-        #     #     nx = (center_x + off_x) % mem.shape[2]
-        #     #     ny = (center_y + off_y) % mem.shape[3]
-        #     #     act_val += mem[0, act_chinds[act_j], nx, ny]
-        #     mem[0, act_chinds[act_j], center_x, center_y] = left_val
-
-        # for cell_i, act_j in ti.ndrange(cell_coords.shape[0], act_chinds.shape[0]):
-        #     center_x = cell_coords[cell_i, 0]
-        #     center_y = cell_coords[cell_i, 1]
-        #     act_val = 0.0
-        #     for off_n in ti.ndrange(kernel.shape[0]):
-        #         neigh_x = (center_x + kernel[off_n, 0]) % mem.shape[2]
-        #         neigh_y = (center_y + kernel[off_n, 1]) % mem.shape[3]
-        #         for sense_n in ti.ndrange(sense_chinds.shape[0]):
-        #             sensor_val = mem[0, sense_chinds[sense_n], neigh_x, neigh_y]
-        #             weight_val = weights[0, act_j, sense_n]
-        #             act_val += sensor_val#weight_val * sensor_val
-        #     mem[0, act_chinds[act_j], center_x, center_y] = act_val #+ biases[0, act_chinds[act_j], 0]
 
     @ti.kernel
-    def mm_2(self, mem: ti.types.ndarray(), out_mem: ti.types.ndarray(), cell_coords: ti.types.ndarray(),
-             kernel: ti.types.ndarray(), sense_chinds: ti.types.ndarray(), act_chinds: ti.types.ndarray(),
-             weights: ti.types.ndarray(), biases: ti.types.ndarray()):
+    def apply_weights_and_biases(self, mem: ti.types.ndarray(), out_mem: ti.types.ndarray(),
+                                 cell_coords: ti.types.ndarray(),
+                                 kernel: ti.types.ndarray(), sense_chinds: ti.types.ndarray(), act_chinds: ti.types.ndarray(),
+                                 weights: ti.types.ndarray(), biases: ti.types.ndarray()):
         for cell_i, act_j in ti.ndrange(cell_coords.shape[0], act_chinds.shape[0]):
             val = 0.0
             center_x = cell_coords[cell_i, 0]
@@ -153,35 +99,26 @@ class NCAOrganismHyper(NeatOrganism):
             for sensor_n, off_m in ti.ndrange(sense_chinds.shape[0], kernel.shape[0]):
                 neigh_x = (center_x + kernel[off_m, 0]) % mem.shape[2]
                 neigh_y = (center_y + kernel[off_m, 1]) % mem.shape[3]
-                val += mem[0, sensor_n, neigh_x, neigh_y] * weights[0, act_j, sensor_n]
-            out_mem[0, act_j, center_x, center_y] = val + biases[0, act_j, 0]
+                val += mem[0, sense_chinds[sensor_n], neigh_x, neigh_y] * weights[0, act_j, sensor_n]
+            # This is okay because actuators are independent of sensors
+            out_mem[0, act_chinds[act_j], center_x, center_y] = val + biases[0, act_j, 0]
 
-    def forward(self, mem, genome_map):
+
+    def forward(self):
+        """
+        input: (w,h) where each value corresponds to a genome key
+
+        Updates the actuators in substrate memory where this organism's genome is present on the map
+        """
         with torch.no_grad():
-            # mem += torch.randn_like(mem) * 0.1
-            cell_coords = self.get_cell_coords(genome_map)
-            out_mem = torch.zeros_like(mem)
-            self.mm_2(mem, out_mem, cell_coords,
+            inds = self.substrate.ti_indices[None]
+            cell_coords = self.get_cell_coords(self.substrate.mem[0, inds.genome])
+            if cell_coords.shape[0] == 0:
+                return
+            out_mem = torch.zeros_like(self.substrate.mem)
+            self.substrate.mem[0,inds.com] += torch.randn_like(self.substrate.mem[0,inds.com]) * 0.01
+            self.substrate.mem[0,inds.com] = torch.clamp(self.substrate.mem[0,inds.com], 0, 1)
+            self.apply_weights_and_biases(self.substrate.mem, out_mem, cell_coords,
                       self.kernel, self.sense_chinds, self.act_chinds,
                       self.net.weights, self.net.biases)
-            # sensor_mem = torch.zeros(cell_coords.shape[0],
-            #                          self.kernel.shape[0] * self.n_senses,
-            #                          dtype=torch.float32, device=self.torch_device)
-            # self.sense_to(mem, sensor_mem, cell_coords, self.sense_chinds, self.kernel)
-            # actions = self.net.activate(sensor_mem)
-            # self.store_actions(actions, mem, self.act_chinds, cell_coords)
-            # self.add_bias(mem, self.net.out_bias, self.act_chinds, cell_coords)
-            mem = nn.ReLU()(out_mem)
-            # Calculate the mean across batch and channel dimensions
-            mean = mem.mean(dim=(0, 2, 3), keepdim=True)
-            # Calculate the variance across batch and channel dimensions
-            var = mem.var(dim=(0, 2, 3), keepdim=True, unbiased=False)
-            # Normalize the input tensor
-            mem.sub_(mean).div_(torch.sqrt(var + 1e-5))
-
-            # mem = ch_norm(mem)
-            mem = torch.sigmoid(mem)
-            self.substrate.mem = mem
-            # mem[:, self.act_chinds] = ch_norm(mem[:, self.act_chinds])
-            # mem[:, self.act_chinds] = torch.sigmoid(mem[:, self.act_chinds])
-            # return mem
+            self.mem = out_mem

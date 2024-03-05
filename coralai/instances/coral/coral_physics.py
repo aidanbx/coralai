@@ -34,22 +34,23 @@ def invest_liquidate(substrate):
 
 
 def decay_add_energy(substrate):
-    inds = substrate.ti_indices[None]
-    # Energy decay and random energy input
-    normal_rand = torch.randn_like(substrate.mem[0, inds.energy])
-    normal_rand = normal_rand * normal_rand
-    substrate.mem[0, inds.energy] += normal_rand * 0.01
-    normal_rand = torch.randn_like(substrate.mem[0, inds.energy])
-    normal_rand = normal_rand * normal_rand
-    substrate.mem[0, inds.energy] -= normal_rand * 0.01
-    substrate.mem[0, inds.infra] -= normal_rand * 0.001
-    substrate.mem[0, inds.energy] = torch.clamp(substrate.mem[0, inds.energy], 0, 99)
-    substrate.mem[0, inds.infra] = torch.clamp(substrate.mem[0, inds.infra], 0, 99)
+    pass
+    # inds = substrate.ti_indices[None]
+    # # Energy decay and random energy input
+    # normal_rand = torch.randn_like(substrate.mem[0, inds.energy])
+    # normal_rand = normal_rand * normal_rand
+    # substrate.mem[0, inds.energy] += normal_rand * 0.01
+    # normal_rand = torch.randn_like(substrate.mem[0, inds.energy])
+    # normal_rand = normal_rand * normal_rand
+    # substrate.mem[0, inds.energy] -= normal_rand * 0.1
+    # substrate.mem[0, inds.infra] -= normal_rand * 0.1
+    # substrate.mem[0, inds.energy] = torch.clamp(substrate.mem[0, inds.energy], 0, 99)
+    # substrate.mem[0, inds.infra] = torch.clamp(substrate.mem[0, inds.infra], 0, 99)
 
 
 @ti.kernel
 def explore(mem: ti.types.ndarray(), investments: ti.types.ndarray(), 
-            new_genomes: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
+            incoming_genomes: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
             genome_bids: ti.types.ndarray(), winning_bid: ti.types.ndarray(),
             kernel: ti.types.ndarray(), ti_inds: ti.template()):
     # incoming investments
@@ -89,7 +90,7 @@ def explore(mem: ti.types.ndarray(), investments: ti.types.ndarray(),
                 if genome_bids[investment_stored_in, 1] > max_bid:
                     max_bid = genome_bids[investment_stored_in, 1]
                     winning_bid_neigh_num = investment_stored_in
-        new_genomes[center_x, center_y] = genome_bids[winning_bid_neigh_num, 0]
+        incoming_genomes[center_x, center_y] = genome_bids[winning_bid_neigh_num, 0]
         winning_bid[center_x, center_y] = genome_bids[winning_bid_neigh_num, 1]
 
 
@@ -114,17 +115,17 @@ def explore_physics(substrate, kernel):
     substrate.mem[0, inds.explore_acts] = torch.softmax(substrate.mem[0, inds.explore_acts], dim=1)
     max_act_i = torch.argmax(substrate.mem[0, inds.explore_acts], dim=0) # be warned, this is the index of the actuator not the index in memory, so 0-6 not
     investments = torch.zeros_like(substrate.mem[0, inds.infra])
-    new_genomes = torch.full_like(substrate.mem[0, inds.genome], -1)
+    incoming_genome_matrix = torch.full_like(substrate.mem[0, inds.genome], -1)
     # This is intermediate storage for each cell in the kernel to use:
     genome_bids = torch.zeros((kernel.shape[0], 2), device=substrate.torch_device) # [[genome, bid_val],[..]]
     winning_bid = torch.zeros_like(substrate.mem[0, inds.infra])
     explore(substrate.mem, investments,
-            new_genomes, max_act_i,
+            incoming_genome_matrix, max_act_i,
             genome_bids, winning_bid,
             kernel, substrate.ti_indices)
-    merging_cells = get_merging_cells(substrate, new_genomes, winning_bid)
+    merging_cell_coords = get_merging_cells(substrate, incoming_genome_matrix, winning_bid)
     handle_investment(substrate, investments)
-    return merging_cells, new_genomes
+    return merging_cell_coords, incoming_genome_matrix
 
 
 def energy_physics(substrate, kernel):
@@ -134,12 +135,12 @@ def energy_physics(substrate, kernel):
     substrate.mem[0, inds.energy] = energy_out_mem
 
 
-def apply_actuators(substrate, ecosystem, kernel):
+def apply_physics(substrate, ecosystem, kernel):
     inds = substrate.ti_indices[None]
     kernel = torch.tensor(kernel, dtype=torch.int32, device=substrate.torch_device)
 
     substrate.mem[0, inds.com] = torch.sigmoid(nn.ReLU()(ch_norm(substrate.mem[0, inds.com])))
-    invest_liquidate(substrate)
-    merging_cells, new_genomes = explore_physics(substrate, kernel)
-    ecosystem.reproduce(merging_cells, new_genomes)
-    energy_physics(substrate, kernel)
+    # invest_liquidate(substrate)
+    # merging_cell_coords, incoming_genome_matrix = explore_physics(substrate, kernel)
+    # ecosystem.sexual_reproduction(merging_cell_coords, incoming_genome_matrix)
+    # energy_physics(substrate, kernel)
