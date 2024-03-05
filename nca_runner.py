@@ -32,11 +32,7 @@ def main(config_filename, channels, shape, kernel, sense_chs, act_chs, torch_dev
 
     genome_key = 0
     genome_map = torch.zeros(shape, dtype=torch.int32, device=torch_device)
-    num_cells_to_activate = 10
-    for _ in range(num_cells_to_activate):
-        x = torch.randint(0, shape[0], (1,))
-        y = torch.randint(0, shape[1], (1,))
-        genome_map[x, y] = 1
+
     # genome_map = torch.randint(0, 10, shape, dtype=torch.int32, device=torch_device)
     vis = Visualization(substrate, [('rgb', 'r'), ('rgb', 'g'), ('rgb', 'b')])
 
@@ -50,10 +46,12 @@ def main(config_filename, channels, shape, kernel, sense_chs, act_chs, torch_dev
         organism.set_genome(genome_key, organism.gen_random_genome(genome_key))
         organism.create_torch_net()
     
+    out_mem = torch.zeros_like(substrate.mem[0, organism.act_chinds])
     while vis.window.running:
-        substrate.mem += torch.randn_like(substrate.mem) * 0.1
-        out_mem = organism.forward(genome_map)
-        substrate.mem[:, organism.act_chinds] = nca_activation(out_mem.unsqueeze(0))
+        # substrate.mem += torch.randn_like(substrate.mem) * 0.1
+        out_mem = organism.forward(out_mem, genome_map)
+        substrate.mem[0, organism.act_chinds] = out_mem
+        substrate.mem[0, organism.act_chinds] = nca_activation(substrate.mem[:, organism.act_chinds])
         vis.update()
         if vis.mutating:
             if organism.is_evolvable:
@@ -75,7 +73,7 @@ if __name__ == "__main__":
             "rgb": ti.types.struct(r=ti.f32, g=ti.f32, b=ti.f32),
             "hidden": ti.types.vector(n=2, dtype=ti.f32),
         },
-        shape=(400, 400),
+        shape=(80, 80),
         kernel=[        [0,-1],
                 [-1, 0],[0, 0],[1, 0],
                         [0, 1]],

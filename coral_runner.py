@@ -2,9 +2,9 @@ import os
 import torch
 import taichi as ti
 from coralai.instances.coral.coral_physics import apply_physics
-from coralai.instances.coral.coral_organism_hyper import CoralHyperOrganism
 from coralai.substrate.substrate import Substrate
 from coralai.evolution.ecosystem import Ecosystem
+from coralai.evolution.hyper_organism import HyperOrganism
 from coralai.substrate.visualization import Visualization
 
 class CoralVis(Visualization):
@@ -47,9 +47,11 @@ def main(config_filename, channels, shape, kernel, sense_chs, act_chs, torch_dev
     config_path = os.path.join(local_dir, config_filename)
     substrate = Substrate(shape, torch.float32, torch_device, channels)
     substrate.malloc()
+    inds = substrate.ti_indices[None]
+    substrate.mem[0, inds.genome,...] = 0
 
     def _create_organism(genome_key, genome=None):
-        org = CoralHyperOrganism(config_path, substrate, kernel, sense_chs, act_chs, torch_device)
+        org = HyperOrganism(config_path, substrate, kernel, sense_chs, act_chs, torch_device)
         if genome is None:
             genome = org.gen_random_genome(genome_key)
         org.set_genome(genome_key, genome=genome)
@@ -63,11 +65,12 @@ def main(config_filename, channels, shape, kernel, sense_chs, act_chs, torch_dev
     vis = CoralVis(substrate, ecosystem, [('com', 'a'), ('com', 'b'), ('com', 'c')])
 
     while vis.window.running:
+        substrate.mem[0, inds.com] += torch.randn_like(substrate.mem[0, inds.com]) * 0.1
         vis.update()
         ecosystem.update(
             seed_interval = 2000000,
             seed_volume = 1,
-            radiation_interval = 5000000,
+            radiation_interval = 300,
             radiation_volume = 1
         )
         # ecosystem.update_population_infra_sum()

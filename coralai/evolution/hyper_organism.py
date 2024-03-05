@@ -102,7 +102,7 @@ class HyperOrganism(NeatOrganism):
             out_mem[act_j, center_x, center_y] = val + biases[0, act_j, 0]
 
 
-    def forward(self, genome_map):
+    def forward(self, out_mem, genome_map=None):
         with torch.no_grad():
             inds = self.substrate.ti_indices[None]
 
@@ -114,12 +114,12 @@ class HyperOrganism(NeatOrganism):
             
             cell_coords = self.get_cell_coords(genome_map)
             if cell_coords.shape[0] == 0:
-                return
+                out_mem
             
             mem = self.substrate.mem
             cell_coords = self.get_cell_coords(genome_map)
 
-            out_mem = torch.zeros_like(self.substrate.mem[0, self.act_chinds])
+            # out_mem = torch.zeros_like(self.substrate.mem[0, self.act_chinds])
 
             self.apply_weights_and_biases(mem, out_mem, cell_coords,
                       self.kernel, self.sense_chinds,

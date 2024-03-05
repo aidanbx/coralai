@@ -8,16 +8,26 @@ class Ecosystem():
         self.substrate.mem[0, inds.genome] = torch.full_like(self.substrate.mem[0, inds.genome], 0)
         self.population = {}
         self.next_free_genome_key = 0
+
+        if initial_size < 1:
+            raise ValueError("ecosystem: initial_size must be greater than 0")
+        
+        self.act_chinds = None
+        self.sense_chinds = None
+
         for _ in range(initial_size):
             org = create_organism(genome_key=self.next_free_genome_key)
+            if self.act_chinds is None:
+                self.act_chinds = org.act_chinds
+                self.sense_chinds = org.sense_chinds
             self.population[self.next_free_genome_key] = {"org": org, "infra": 0.1}
             self.next_free_genome_key += 1
-        
 
         self.create_organism = create_organism
         self.apply_physics = apply_physics
         self.min_size = initial_size
         self.time_step = 0
+        self.out_mem = None
 
     
     def sexual_reproduction(self, merging_cell_coords, incoming_genome_matrix):
@@ -45,6 +55,16 @@ class Ecosystem():
             self.population[genome_key]["infra"] = infra_sum
 
 
+    def get_random_coords_of_genome(self, genome_key, n_coords=1):
+        inds = self.substrate.ti_indices[None]
+        genome_coords = torch.where(self.substrate.mem[0, inds.genome] == genome_key)
+        random_indices = torch.randint(0, genome_coords[0].shape[0], (n_coords,))
+        x_coords = genome_coords[2][random_indices]
+        y_coords = genome_coords[3][random_indices]
+        coords = torch.stack((x_coords, y_coords), dim=1)
+        return coords.tolist()
+
+
     def get_random_genome_keys(self, n_genomes):
         inds = self.substrate.ti_indices[None]
         infras = torch.tensor([org_info['infra'] for org_info in self.population.values()], dtype=torch.float32)
@@ -66,7 +86,20 @@ class Ecosystem():
         random_y_coords = torch.randint(0, self.substrate.h, (n_seeds,))
         for i in range(n_seeds):
             self.substrate.mem[0, inds.genome, random_x_coords[i], random_y_coords[i]] = selected_genome_keys[i]
-            self.substrate.mem[0, inds.infra, random_x_coords[i], random_y_coords[i]] += 2
+            # self.substrate.mem[0, inds.infra, random_x_coords[i], random_y_coords[i]] += 2
+
+
+    def mutate(self, genome_key, report=False):
+        new_genome = self.population[genome_key]['org'].mutate()
+        new_organism = self.create_organism(genome_key=self.next_free_genome_key, genome=new_genome)
+        self.population[self.next_free_genome_key] = {"org": new_organism, "infra": 0.1}
+        self.next_free_genome_key += 1
+        if report:
+            print(f"Mutated genome {genome_key} to {self.next_free_genome_key-1}")
+            print(f"New Genome: {new_genome}")
+            print(f"Weights: {new_organism.net.weights}")
+            print("--------")
+        return self.next_free_genome_key-1
 
 
     def apply_radiation(self, n_radiation_spots):
@@ -75,20 +108,19 @@ class Ecosystem():
         random_x_coords = torch.randint(0, self.substrate.w, (n_radiation_spots,))
         random_y_coords = torch.randint(0, self.substrate.h, (n_radiation_spots,))
         for i in range(n_radiation_spots):
-            new_genome = self.population[selected_genome_keys[i]]['org'].mutate()
-            new_organism = self.create_organism(genome_key=self.next_free_genome_key, genome=new_genome)
-            self.population[self.next_free_genome_key] = {"org": new_organism, "infra": 0.1}
-            self.substrate.mem[0, inds.genome, random_x_coords[i], random_y_coords[i]] = self.next_free_genome_key
-            self.substrate.mem[0, inds.infra, random_x_coords[i], random_y_coords[i]] += 2
-            self.next_free_genome_key += 1
+            new_genome_key = self.mutate(selected_genome_keys[i])
+            coords = self.get_random_coords_of_genome(selected_genome_keys[i])
+            self.substrate.mem[0, inds.genome, coords[0][0], coords[0][1]] = new_genome_key
             
 
-    def update(self, seed_interval, seed_volume, radiation_interval, radiation_volume):
+    def update(self, seed_interval=5, seed_volume=5, radiation_interval=5, radiation_volume=5):
         # if self.time_step % seed_interval == 0:
         #     self.sew_seeds(seed_volume)
         # if self.time_step % radiation_interval == 0:
         #     self.apply_radiation(radiation_volume)
         for org_info in self.population.values():
-            org_info['org'].forward()
-        # self.apply_physics()
-
+            if self.out_mem is None:
+                self.out_mem = torch.zeros_like(self.substrate.mem[0, org_info['org'].act_chinds])
+            self.out_mem = org_info['org'].forward(self.out_mem)
+        self.substrate.mem[0, self.act_chinds] = self.out_mem
+        self.apply_physics()

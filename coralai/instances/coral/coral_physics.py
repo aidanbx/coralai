@@ -137,9 +137,8 @@ def energy_physics(substrate, kernel):
 
 def apply_physics(substrate, ecosystem, kernel):
     inds = substrate.ti_indices[None]
-    kernel = torch.tensor(kernel, dtype=torch.int32, device=substrate.torch_device)
 
-    substrate.mem[0, inds.com] = torch.sigmoid(nn.ReLU()(ch_norm(substrate.mem[0, inds.com])))
+    substrate.mem[0, inds.com] = torch.sigmoid(nn.ReLU()(ch_norm(substrate.mem[:, inds.com])))
     # invest_liquidate(substrate)
     # merging_cell_coords, incoming_genome_matrix = explore_physics(substrate, kernel)
     # ecosystem.sexual_reproduction(merging_cell_coords, incoming_genome_matrix)
