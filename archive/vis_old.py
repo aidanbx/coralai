@@ -1,14 +1,14 @@
 import time
 import taichi as ti
 from ..utils.ti_struct_factory import TaichiStructFactory
-from ..substrate.world import World
+from ..substrate.substrate import Substrate
 # from .vis_params import VisParams, VIS_CHIDS
 
 @ti.data_oriented
 class Vis:
     def __init__(
         self,
-        world: World,
+        world: Substrate,
         chids: list,
         name: str = None,
         scale: int = None,

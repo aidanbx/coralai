@@ -2,26 +2,26 @@ import torch
 import taichi as ti
 import torch.nn as nn
 
-from ...dynamics.nn_lib import ch_norm
-from ...dynamics.Organism import Organism
+from ...substrate.nn_lib import ch_norm
+from ...evolution.organism import Organism
 
 @ti.data_oriented
-class CoralOrganism(Organism):
-    def __init__(self, world, sensors, n_actuators, latent_size = None):
-        super(CoralOrganism, self).__init__(world, sensors, n_actuators)
+class NCAOrganismCNN(Organism):
+    def __init__(self, substrate, kernel, sense_chs, act_chs, torch_device, latent_size = None):
+        super().__init__(substrate, kernel, sense_chs, act_chs, torch_device)
 
         if latent_size is None:
-            latent_size = (self.n_sensors + self.n_actuators) // 2
+            latent_size = (self.n_senses + self.n_acts) // 2
         self.latent_size = latent_size
 
         # First convolutional layer
         self.conv = nn.Conv2d(
-            self.n_sensors,
+            self.n_senses,
             self.latent_size,
             kernel_size=3,
             padding=1,
             padding_mode='circular',
-            device=self.world.torch_device,
+            device=torch_device,
             bias=False
         )
 
@@ -31,17 +31,17 @@ class CoralOrganism(Organism):
             kernel_size=3,
             padding=1,
             padding_mode='circular',
-            device=self.world.torch_device,
+            device=torch_device,
             bias=False
         )
 
         self.latent_conv_2 = nn.Conv2d(
             self.latent_size,
-            self.n_actuators,
+            self.n_acts,
             kernel_size=3,
             padding=1,
             padding_mode='circular',
-            device=self.world.torch_device,
+            device=torch_device,
             bias=False
         )
     
@@ -57,10 +57,15 @@ class CoralOrganism(Organism):
             x = ch_norm(x)
             x = torch.sigmoid(x)
 
-            return self.latent_conv_2(x)
+            x = self.latent_conv_2(x)
+            x = nn.ReLU()(x)
+            x = ch_norm(x)
+            x = torch.sigmoid(x)
+
+            return x
 
 
-    def perturb_weights(self, perturbation_strength):
+    def mutate(self, perturbation_strength):
         self.conv.weight.data += perturbation_strength * torch.randn_like(self.conv.weight.data)
         self.latent_conv.weight.data += perturbation_strength * torch.randn_like(self.latent_conv.weight.data)
         self.latent_conv_2.weight.data += perturbation_strength * torch.randn_like(self.latent_conv_2.weight.data)

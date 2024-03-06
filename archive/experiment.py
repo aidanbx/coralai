@@ -1,7 +1,7 @@
 import taichi as ti
 import torch
 from coralai.coralai import coralai
-from coralai.analysis.vis_old import Vis
+from coralai.simulation.vis_old import Vis
 
 ti.init(ti.gpu)  
 ein = coralai(shape=(50, 50), torch_device=torch.device("mps"), num_com=5)

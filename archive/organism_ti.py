@@ -2,11 +2,13 @@ import taichi as ti
 import torch
 import torch.nn as nn
 from .nn_lib import ch_norm
+from .Organism import Organism
 
 LATENT_SIZE = 4
 
 @ti.data_oriented
-class Organism:
+class Organism_ti(Organism):
+    # NOT CURRENTLY INTEGRATED INTO THE FLOW, MORE OF A REPOSITORY. LOOK AT CORAL ORGANISM TI
     def __init__(self, world):
         self.world = world
         self.shape = world.shape
@@ -14,9 +16,10 @@ class Organism:
         self.h = world.h
         self.sensors = [('com', 'r'), ('com', 'g'), ('com', 'b'), ('com', 'a')]
         self.actuators = [('com', 'r'), ('com', 'g'), ('com', 'b'), ('com', 'a')]
-        self.define_weights(self.sensors, self.actuators)
+        self.define_weights()
 
-    def define_weights(self, sensors, actuators, latent_sizes=None):
+
+    def define_weights(self):
         self.sensor_inds = self.world.windex_obj[self.sensors]
         self.actuator_inds = self.world.windex_obj[self.actuators]
         self.n_sensors = self.sensor_inds.shape[0]
@@ -29,6 +32,7 @@ class Organism:
         self.latent_bias = torch.zeros(1, device=self.world.torch_device)#torch.randn(1)
         self.act_bias = torch.zeros(1, device=self.world.torch_device)#torch.randn(1)
         
+
     @ti.kernel
     def sense_act(self,
                   mem: ti.types.ndarray(),
@@ -49,6 +53,7 @@ class Organism:
             actuator_sum += bias
             mem[row_idx, col_idx, actuator_inds[actuator_idx]] = actuator_sum
 
+
     @ti.kernel
     def sense(self,
               mem: ti.types.ndarray(),
@@ -64,6 +69,7 @@ class Organism:
                 lat_node_sum += (sense_weights[sensor_idx, latent_idx, offset_row, offset_col] *
                                    mem[offset_row_idx, offset_col_idx, sensor_inds[sensor_idx]])
             latent_layer[row_idx, col_idx, latent_idx] = lat_node_sum
+
 
     @ti.kernel
     def act(self,

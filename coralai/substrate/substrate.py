@@ -4,11 +4,11 @@ import taichi as ti
 import numpy as np
 from ..utils.ti_struct_factory import TaichiStructFactory
 from .channel import Channel
-from .world_index import WorldIndex
+from .substrate_index import SubstrateIndex
 
 
 @ti.data_oriented
-class World:
+class Substrate:
     # TODO: Support multi-level indexing beyond 2 levels
     # TODO: Support mixed taichi and torch tensors - which will be transferred more?
     def __init__(self, shape, torch_dtype, torch_device, channels: dict = None):
@@ -26,6 +26,9 @@ class World:
         self.ti_lims_builder = TaichiStructFactory()
         self.ti_indices = -1
         self.ti_lims = -1
+
+    def index_to_chname(self, index):
+        return self.windex.index_to_chname(index)
 
 
     def add_channel(self, chid: str, ti_dtype=ti.f32, **kwargs):
@@ -184,7 +187,7 @@ class World:
         self.mem, self.channels = self._transfer_to_mem(
             mem, tensor_dict, index_tree, self.channels
         )
-        self.windex = WorldIndex(index_tree)
+        self.windex = SubstrateIndex(index_tree)
         self.ti_indices = self.ti_ind_builder.build()
         self.ti_lims = self.ti_lims_builder.build()
         self.mem = self.mem.permute(2, 0, 1).unsqueeze(0).contiguous()
