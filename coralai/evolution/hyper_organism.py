@@ -56,6 +56,10 @@ class HyperOrganism(NeatOrganism):
         return neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                            neat.DefaultSpeciesSet, neat.DefaultStagnation,
                            temp_config_path)
+    
+
+    def c(self, fitness):
+        self.genome.fitness = fitness
 
 
     def create_torch_net(self, batch_size = None):
@@ -102,6 +106,7 @@ class HyperOrganism(NeatOrganism):
             out_mem[act_j, center_x, center_y] = val + biases[0, act_j, 0]
 
 
+
     def forward(self, out_mem, genome_map=None):
         with torch.no_grad():
             inds = self.substrate.ti_indices[None]
@@ -116,12 +121,7 @@ class HyperOrganism(NeatOrganism):
             if cell_coords.shape[0] == 0:
                 out_mem
             
-            mem = self.substrate.mem
-            cell_coords = self.get_cell_coords(genome_map)
-
-            # out_mem = torch.zeros_like(self.substrate.mem[0, self.act_chinds])
-
-            self.apply_weights_and_biases(mem, out_mem, cell_coords,
+            self.apply_weights_and_biases(self.substrate.mem, out_mem, cell_coords,
                       self.kernel, self.sense_chinds,
                       self.net.weights, self.net.biases)
             

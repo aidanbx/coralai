@@ -1,7 +1,13 @@
 import torch
 
+live_genomes = torch.tensor([1, 2, 3], device="mps")  # Example tensor for live genomes
+substrate_mem = torch.tensor([[0, 1, 2, 3, 4],
+                              [9, 9, 9, 9, 9],
+                              [9, 9, 9, 9, 9],
+                              [9, 9, 9, 9, 9]], device="mps")  # Example tensor for substrate memory
 
-t = torch.tensor([[[4,8,4],[23,2,2]],[[2,3,1],[2,3,1]]], dtype=torch.float32, device="mps")
-t[0,:]=1
+t = substrate_mem * 1
+t[:] = 999
 print(t)
+print(substrate_mem)
 
