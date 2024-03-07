@@ -8,7 +8,8 @@ from .substrate import Substrate
 class Visualization:
     def __init__(self,
                  substrate: Substrate,
-                 chids: list,
+                 chids: list = None,
+                 chindices: list = None,
                  name: str = None,
                  scale: int = None,):
         self.substrate = substrate
@@ -17,10 +18,14 @@ class Visualization:
         self.chids = chids
         self.scale = 1 if scale is None else scale
 
-        chindices = self.substrate.get_inds_tivec(self.chids)
-        self.name = f"Vis: {[self.substrate.index_to_chname(chindices[i]) for i in range(len(chindices))]}" if name is None else name
-
-        self.chindices = chindices
+        if chids:
+            chindices = self.substrate.get_inds_tivec(self.chids)
+        if chindices:
+            self.chindices = chindices
+        else:
+            self.chindices = [0, 1, 2]
+        # self.name = f"Vis: {[self.substrate.index_to_chname(chindices[i]) for i in range(len(chindices))]}" if name is None else name
+        self.name = "Vis"
 
         if scale is None:
             max_dim = max(self.substrate.w, self.substrate.h)
@@ -48,6 +53,8 @@ class Visualization:
         self.channel_to_paint = 0
         self.val_to_paint = 0.1
 
+    def set_channels(self, chindices):
+        self.chindices = chindices
 
     @ti.kernel
     def add_val_to_loc(self,
