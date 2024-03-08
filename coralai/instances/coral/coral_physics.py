@@ -4,6 +4,22 @@ import torch.nn as nn
 
 from ...substrate.nn_lib import ch_norm
 
+
+def activate_outputs(substrate, ind_of_middle):
+    inds = substrate.ti_indices[None]
+    substrate.mem[0, inds.com] = torch.sigmoid(nn.ReLU()(ch_norm(substrate.mem[:, inds.com])))
+
+    substrate.mem[0, [inds.acts_invest, inds.acts_liquidate]] = torch.softmax(substrate.mem[0, [inds.acts_invest, inds.acts_liquidate]], dim=0)
+
+    substrate.mem[:, inds.acts_explore] = nn.ReLU()(ch_norm(substrate.mem[:, inds.acts_explore]))
+    mean_activation = torch.mean(substrate.mem[0, inds.acts_explore], dim=0)
+    substrate.mem[0, inds.acts_explore[ind_of_middle]] = mean_activation + 0.1
+    substrate.mem[0, inds.acts_explore] = torch.softmax(substrate.mem[0, inds.acts_explore], dim=1)
+
+    substrate.mem[0, inds.acts] = torch.where(substrate.mem[0, inds.genome] < 0, 0, substrate.mem[0, inds.acts])
+
+
+
 @ti.kernel
 def distribute_energy(mem: ti.types.ndarray(), out_energy_mem: ti.types.ndarray(),
                       kernel: ti.types.ndarray(), ti_inds: ti.template()):
@@ -14,8 +30,6 @@ def distribute_energy(mem: ti.types.ndarray(), out_energy_mem: ti.types.ndarray(
         for off_n in ti.ndrange(kernel.shape[0]):
             neigh_x = (i + kernel[off_n, 0]) % mem.shape[2]
             neigh_y = (j + kernel[off_n, 1]) % mem.shape[3]
-            if mem[0, inds.infra, neigh_x, neigh_y] < 0.1:
-                mem[0, inds.infra, neigh_x, neigh_y] = 0.1
             infra_sum += mem[0, inds.infra, neigh_x, neigh_y]
         for off_n in ti.ndrange(kernel.shape[0]):
             neigh_x = (i + kernel[off_n, 0]) % mem.shape[2]
@@ -27,6 +41,7 @@ def distribute_energy(mem: ti.types.ndarray(), out_energy_mem: ti.types.ndarray(
 
 def energy_physics(substrate, kernel):
     inds = substrate.ti_indices[None]
+    substrate.mem[0, inds.infra] = torch.clamp(substrate.mem[0, inds.infra], 0.0001, 100)
     energy_out_mem = torch.zeros_like(substrate.mem[0, inds.energy])
     distribute_energy(substrate.mem, energy_out_mem, kernel, substrate.ti_indices)
     substrate.mem[0, inds.energy] = energy_out_mem
@@ -34,7 +49,6 @@ def energy_physics(substrate, kernel):
 
 def invest_liquidate(substrate):
     inds = substrate.ti_indices[None]
-    substrate.mem[0, [inds.acts_invest, inds.acts_liquidate]] = torch.softmax(substrate.mem[0, [inds.acts_invest, inds.acts_liquidate]], dim=0)
     investments = substrate.mem[0, inds.acts_invest] * substrate.mem[0, inds.energy]
     liquidations = substrate.mem[0, inds.acts_liquidate] * substrate.mem[0, inds.infra]
     substrate.mem[0, inds.energy] += liquidations - investments
@@ -55,7 +69,8 @@ def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
             offset_y = kernel[offset_n, 1]
             neigh_x = (i + offset_x) % mem.shape[2]
             neigh_y = (j + offset_y) % mem.shape[3]
-
+            if mem[0, inds.genome, neigh_x, neigh_y] < 0:
+                continue
             neigh_max_act_i = max_act_i[neigh_x, neigh_y]
             bid = 0.0
             # if neigh's explore dir points towards this center
@@ -75,12 +90,9 @@ def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
         winning_genomes[i, j] = winning_genome
 
 
-def explore_physics(substrate, kernel, ind_of_middle):
+def explore_physics(substrate, kernel):
     inds = substrate.ti_indices[None]
-    substrate.mem[:, inds.acts_explore] = nn.ReLU()(ch_norm(substrate.mem[:, inds.acts_explore]))
-    mean_activation = torch.mean(substrate.mem[0, inds.acts_explore], dim=0)
-    substrate.mem[0, inds.acts_explore[ind_of_middle]] = mean_activation + 0.1
-    substrate.mem[0, inds.acts_explore] = torch.softmax(substrate.mem[0, inds.acts_explore], dim=1)
+
     max_act_i = torch.argmax(substrate.mem[0, inds.acts_explore], dim=0) # be warned, this is the index of the actuator not the index in memory, so 0-6 not
     infra_delta = torch.zeros_like(substrate.mem[0, inds.infra])
     winning_genome = substrate.mem[0, inds.genome] * 1

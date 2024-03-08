@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+import numpy as np
 import torch
 import neat
 import taichi as ti
@@ -7,7 +8,7 @@ import torch.nn as nn
 
 from ..substrate.nn_lib import ch_norm
 
-from coralai.instances.coral.coral_physics import invest_liquidate, explore_physics, energy_physics
+from coralai.instances.coral.coral_physics import invest_liquidate, explore_physics, energy_physics, activate_outputs
 
 # from pytorch_neat.cppn import create_cppn
 from pytorch_neat.activations import relu_activation, sigmoid_activation, tanh_activation, identity_activation
@@ -70,11 +71,13 @@ class NEATEvolver():
             org['genome'].fitness = self.substrate.mem[0, inds.genome].eq(i).sum().item()
             # org['genome'].fitness = (self.get_genome_infra_sum(i)).item()
 
+
     def run_sim(self, organisms, n_timesteps, vis = None):
         inds = self.substrate.ti_indices[None]
+        self.substrate.mem[...] = 0.0
         # set 20% of cells to genome -1
         self.substrate.mem[0, inds.genome] = torch.where(
-            torch.rand_like(self.substrate.mem[0, inds.genome]) > 0.99,
+            torch.rand_like(self.substrate.mem[0, inds.genome]) > 0.9,
             torch.randint_like(self.substrate.mem[0, inds.genome], 0, len(organisms)),
             -1
         )
@@ -89,8 +92,9 @@ class NEATEvolver():
             combined_biases[i, 0] = organisms[i]["net"].biases
 
         out_mem = torch.zeros_like(self.substrate.mem[0, self.act_chinds])
+        rand_time_offset = torch.randint(0, 100, (1,)).item()
         for timestep in range(n_timesteps):
-            self.step_sim(combined_weights, combined_biases, out_mem, timestep)
+            self.step_sim(combined_weights, combined_biases, out_mem, timestep + rand_time_offset)
             if vis is not None:
                 vis.update()
 
@@ -103,26 +107,39 @@ class NEATEvolver():
             combined_weights, combined_biases,
             inds.genome)
         self.substrate.mem[0, self.act_chinds] = out_mem
-        self.substrate.mem[0, inds.com] = torch.sigmoid(nn.ReLU()(ch_norm(self.substrate.mem[:, inds.com])))
+        
         self.energy_offset = self.get_energy_offset(timestep)
         self.substrate.mem[0, inds.energy] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + self.energy_offset) * 0.1
-        self.substrate.mem[0, inds.infra] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + self.energy_offset) * 0.1
+        # self.substrate.mem[0, inds.infra] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + self.energy_offset) * 0.1
         self.apply_physics()
     
 
     def apply_physics(self):
         inds = self.substrate.ti_indices[None]
+        activate_outputs(self.substrate, self.ind_of_middle)
         invest_liquidate(self.substrate)
-        explore_physics(self.substrate, self.kernel, self.ind_of_middle)
+        explore_physics(self.substrate, self.kernel)
         energy_physics(self.substrate, self.kernel)
 
 
-    def get_energy_offset(self, timestep, cycle_length=100, percent_day=0.5, night_intensity=1, day_intensity=1):
-        cycle_completion = (timestep % cycle_length) / cycle_length # 0-1
-        if cycle_completion < percent_day:
-            return day_intensity
+    def custom_sine(timestep, repeat_steps=50, amplitude=1, positive_scale=2, negative_scale=1):
+        frequency = (2 * np.pi) / repeat_steps
+        value = amplitude * np.sin(frequency * timestep)
+        if value > 0:
+            return value * positive_scale
         else:
-            return -night_intensity
+            return value * negative_scale
+        
+        
+    def get_energy_offset(self, timestep, cycle_length=100, percent_day=0.5, night_intensity=1, day_intensity=1):
+        cycle_completion = (timestep % cycle_length) / cycle_length  # 0-1
+        if cycle_completion < percent_day:
+            # Scale intensity linearly based on cycle_completion within the day period
+            return day_intensity * (cycle_completion / percent_day)
+        else:
+            # Scale intensity linearly within the night period
+            night_progress = (cycle_completion - percent_day) / (1 - percent_day)
+            return -night_intensity * night_progress
 
 
     @ti.kernel
