@@ -7,21 +7,58 @@ from ...substrate.nn_lib import ch_norm
 
 def activate_outputs(substrate, ind_of_middle):
     inds = substrate.ti_indices[None]
-    substrate.mem[0, inds.com] = torch.sigmoid(nn.ReLU()(ch_norm(substrate.mem[:, inds.com])))
+    substrate.mem[:, inds.com] = torch.sigmoid(ch_norm(substrate.mem[:, inds.com]))
+    substrate.mem[:, [inds.acts_invest, inds.acts_liquidate]] = torch.sigmoid(ch_norm(substrate.mem[:, [inds.acts_invest, inds.acts_liquidate]]))
 
-    substrate.mem[0, [inds.acts_invest, inds.acts_liquidate]] = torch.softmax(substrate.mem[0, [inds.acts_invest, inds.acts_liquidate]], dim=0)
-
-    substrate.mem[:, inds.acts_explore] = nn.ReLU()(ch_norm(substrate.mem[:, inds.acts_explore]))
-    mean_activation = torch.mean(substrate.mem[0, inds.acts_explore], dim=0)
-    substrate.mem[0, inds.acts_explore[ind_of_middle]] = mean_activation + 0.1
+    # substrate.mem[:, inds.acts_explore] = nn.ReLU()(substrate.mem[:, inds.acts_explore])
+    # mean_activation = torch.mean(substrate.mem[0, inds.acts_explore], dim=0)
+    # substrate.mem[0, inds.acts_explore[ind_of_middle]] = mean_activation + 2
     substrate.mem[0, inds.acts_explore] = torch.softmax(substrate.mem[0, inds.acts_explore], dim=1)
 
     substrate.mem[0, inds.acts] = torch.where(substrate.mem[0, inds.genome] < 0, 0, substrate.mem[0, inds.acts])
 
-
+@ti.kernel
+def flow_energy_down(mem: ti.types.ndarray(), out_energy_mem: ti.types.ndarray(),
+                     max_energy: ti.f32, kernel: ti.types.ndarray(), ti_inds: ti.template()):
+    inds = ti_inds[None]
+    for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
+        central_energy = mem[0, inds.energy, i, j]
+        if central_energy > max_energy:
+            energy_sum_inverse = 0.0
+            # Calculate the sum of the inverse of energystructure levels for neighboring cells
+            for off_n in ti.ndrange(kernel.shape[0]):
+                neigh_x = (i + kernel[off_n, 0]) % mem.shape[2]
+                neigh_y = (j + kernel[off_n, 1]) % mem.shape[3]
+                energy_level = mem[0, inds.energy, neigh_x, neigh_y]
+                # Avoid division by zero by ensuring a minimum energystructure level
+                energy_level = max(energy_level, 0.0001)  # Assuming 0.0001 as a minimum to avoid division by zero
+                energy_sum_inverse += 1.0 / energy_level
+            # Distribute energy based on the inverse proportion of energystructure levels
+            for off_n in ti.ndrange(kernel.shape[0]):
+                neigh_x = (i + kernel[off_n, 0]) % mem.shape[2]
+                neigh_y = (j + kernel[off_n, 1]) % mem.shape[3]
+                neigh_energy = mem[0, inds.energy, neigh_x, neigh_y]
+                neigh_energy = max(neigh_energy, 0.0001)  # Again, ensuring a minimum energystructure level
+                # Calculate the share of energy based on the inverse of energystructure level
+                energy_share = central_energy * ((1.0 / neigh_energy) / energy_sum_inverse)
+                out_energy_mem[neigh_x, neigh_y] += energy_share
+        else:
+            out_energy_mem[i, j] += mem[0, inds.energy, i, j]
 
 @ti.kernel
-def distribute_energy(mem: ti.types.ndarray(), out_energy_mem: ti.types.ndarray(),
+def distribute_energy(mem: ti.types.ndarray(), out_energy: ti.types.ndarray(), max_energy: ti.f32, kernel: ti.types.ndarray(), ti_inds: ti.template()):
+    inds = ti_inds[None]
+    for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
+        if mem[0, inds.energy, i, j] > max_energy:
+            for off_n in ti.ndrange(kernel.shape[0]):
+                neigh_x = (i + kernel[off_n, 0]) % mem.shape[2]
+                neigh_y = (j + kernel[off_n, 1]) % mem.shape[3]
+                out_energy[neigh_x, neigh_y] += (mem[0, inds.energy, i, j] / kernel.shape[0])
+        else:
+            out_energy[i, j] += mem[0, inds.energy, i, j]
+
+@ti.kernel
+def flow_energy_up(mem: ti.types.ndarray(), out_energy_mem: ti.types.ndarray(),
                       kernel: ti.types.ndarray(), ti_inds: ti.template()):
     inds = ti_inds[None]
     for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
@@ -36,15 +73,36 @@ def distribute_energy(mem: ti.types.ndarray(), out_energy_mem: ti.types.ndarray(
             neigh_y = (j + kernel[off_n, 1]) % mem.shape[3]
             neigh_infra = mem[0, inds.infra, neigh_x, neigh_y]
             out_energy_mem[neigh_x, neigh_y] += (
-                central_energy * (neigh_infra/infra_sum))
+                central_energy * ((neigh_infra/infra_sum)))
+            
+@ti.kernel
+def distribute_infra(mem: ti.types.ndarray(), out_infra: ti.types.ndarray(), max_infra: ti.f32, kernel: ti.types.ndarray(), ti_inds: ti.template()):
+    inds = ti_inds[None]
+    for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
+        if mem[0, inds.infra, i, j] > max_infra:
+            for off_n in ti.ndrange(kernel.shape[0]):
+                neigh_x = (i + kernel[off_n, 0]) % mem.shape[2]
+                neigh_y = (j + kernel[off_n, 1]) % mem.shape[3]
+                out_infra[neigh_x, neigh_y] += (mem[0, inds.infra, i, j] / kernel.shape[0])
+        else:
+            out_infra[i, j] += mem[0, inds.infra, i, j]
+    
 
-
-def energy_physics(substrate, kernel):
+def energy_physics(substrate, kernel, max_infra, max_energy):
     inds = substrate.ti_indices[None]
-    substrate.mem[0, inds.infra] = torch.clamp(substrate.mem[0, inds.infra], 0.0001, 100)
+    # substrate.mem[0, inds.infra] = torch.clamp(substrate.mem[0, inds.infra], 0.0001, 100)
+
     energy_out_mem = torch.zeros_like(substrate.mem[0, inds.energy])
-    distribute_energy(substrate.mem, energy_out_mem, kernel, substrate.ti_indices)
+    flow_energy_up(substrate.mem, energy_out_mem, kernel, substrate.ti_indices)
     substrate.mem[0, inds.energy] = energy_out_mem
+
+    energy_out_mem = torch.zeros_like(substrate.mem[0, inds.energy])
+    distribute_energy(substrate.mem, energy_out_mem, max_energy, kernel, substrate.ti_indices)
+    substrate.mem[0, inds.energy] = energy_out_mem
+
+    infra_out_mem = torch.zeros_like(substrate.mem[0, inds.infra])
+    distribute_infra(substrate.mem, infra_out_mem, max_infra, kernel, substrate.ti_indices)
+    substrate.mem[0, inds.infra] = infra_out_mem
 
 
 def invest_liquidate(substrate):
@@ -63,7 +121,7 @@ def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
     inds = ti_inds[None]
     for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
         winning_genome = mem[0, inds.genome, i, j]
-        max_bid = mem[0, inds.infra, i, j]
+        max_bid = 0.0
         for offset_n in ti.ndrange(kernel.shape[0]):
             offset_x = kernel[offset_n, 0]
             offset_y = kernel[offset_n, 1]
@@ -77,17 +135,18 @@ def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
             if (((kernel[neigh_max_act_i, 0] + offset_x) == 0 and (kernel[neigh_max_act_i, 1] + offset_y) == 0) or
                 (offset_x == 0 and offset_y == 0)): # central cell always gets a bid 
                 if offset_x == 0 and offset_y == 0:
-                    bid = mem[0, inds.infra, i, j] # max possible bid
+                    bid = mem[0, inds.infra, i, j] * 0.5 # max possible bid
                 else:
-                    bid = (
-                        mem[0, inds.infra, neigh_x, neigh_y] *
-                        mem[0, explore_inds[neigh_max_act_i], neigh_x, neigh_y])
+                    bid = mem[0, inds.infra, neigh_x, neigh_y] * 0.3
                     infra_delta[neigh_x, neigh_y] -= bid # bids are always taken as investment
-                    infra_delta[i, j] += bid
+                    infra_delta[i, j] += bid * 0.9
                 if bid > max_bid:
                     max_bid = bid
                     winning_genome = mem[0, inds.genome, neigh_x, neigh_y]
         winning_genomes[i, j] = winning_genome
+        # if max_bid > mem[0, inds.infra, i, j]/2 or mem[0, inds.genome, i, j] < 0:
+        # else:
+        #     winning_genomes[i, j] = mem[0, inds.genome, i, j]
 
 
 def explore_physics(substrate, kernel):
@@ -95,7 +154,7 @@ def explore_physics(substrate, kernel):
 
     max_act_i = torch.argmax(substrate.mem[0, inds.acts_explore], dim=0) # be warned, this is the index of the actuator not the index in memory, so 0-6 not
     infra_delta = torch.zeros_like(substrate.mem[0, inds.infra])
-    winning_genome = substrate.mem[0, inds.genome] * 1
+    winning_genome = torch.zeros_like(substrate.mem[0, inds.genome])
     # This is intermediate storage for each cell in the kernel to use:
     explore_inds = torch.tensor(inds.acts_explore)
     explore(substrate.mem, max_act_i,
@@ -104,38 +163,3 @@ def explore_physics(substrate, kernel):
     # handle_investment(substrate, infra_delta)
     substrate.mem[0, inds.genome] = winning_genome
     substrate.mem[0, inds.infra] += infra_delta
-
-
-@ti.kernel
-def get_live_cell_mask(mem: ti.types.ndarray(), live_mask: ti.types.ndarray(),
-                            live_genomes: ti.types.ndarray(), ti_inds: ti.template()):
-    inds = ti_inds[None]
-    for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
-        is_alive = 0
-        curr_genome = mem[0, inds.genome, i, j]
-        for genome_i in ti.ndrange(live_genomes.shape[0]):
-            if curr_genome == live_genomes[genome_i]:
-                is_alive = 1
-        live_mask[i, j] = is_alive
-        if is_alive == 0:
-            mem[0, inds.genome, i, j] = -1
-
-
-def apply_physics(substrate, ecosystem, kernel):
-    inds = substrate.ti_indices[None]
-
-    substrate.mem[0, inds.com] = torch.sigmoid(nn.ReLU()(ch_norm(substrate.mem[:, inds.com])))
-
-    live_genomes = torch.tensor(list(ecosystem.population.keys()), device = substrate.torch_device)
-    live_mask = torch.zeros_like(substrate.mem[0, inds.genome])
-    get_live_cell_mask(substrate.mem, live_mask, live_genomes, substrate.ti_indices)
-    substrate.mem[0, inds.acts] *= live_mask
-
-    substrate.mem[0, inds.energy] += torch.randn_like(substrate.mem[0, inds.energy]) * 0.1
-
-    invest_liquidate(substrate, live_mask)
-    to_convert = substrate.mem[0, inds.infra] * (torch.randn_like(substrate.mem[0, inds.energy]))**2
-    substrate.mem[0, inds.infra] -= to_convert
-    substrate.mem[0, inds.energy] += to_convert
-    explore_physics(substrate, live_mask, kernel)
-    energy_physics(substrate, kernel)

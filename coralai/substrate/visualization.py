@@ -9,7 +9,7 @@ class Visualization:
     def __init__(self,
                  substrate: Substrate,
                  chids: list = None,
-                 chindices: list = None,
+                 chinds: list = None,
                  name: str = None,
                  scale: int = None,):
         self.substrate = substrate
@@ -17,13 +17,8 @@ class Visualization:
         self.h = substrate.h
         self.chids = chids
         self.scale = 1 if scale is None else scale
-
-        if chids:
-            chindices = self.substrate.get_inds_tivec(self.chids)
-        if chindices:
-            self.chindices = chindices
-        else:
-            self.chindices = [0, 1, 2]
+        chinds = substrate.get_inds_tivec(chids)
+        self.chinds = torch.tensor(list(chinds), device = substrate.torch_device)
         # self.name = f"Vis: {[self.substrate.index_to_chname(chindices[i]) for i in range(len(chindices))]}" if name is None else name
         self.name = "Vis"
 
@@ -35,7 +30,7 @@ class Visualization:
         self.scale = scale
         self.img_w = self.substrate.w * scale
         self.img_h = self.substrate.h * scale
-        self.n_channels = len(chindices)
+        self.n_channels = len(chinds)
         self.image = ti.Vector.field(n=3, dtype=ti.f32, shape=(self.img_w, self.img_h))
 
         self.window = ti.ui.Window(
@@ -54,7 +49,7 @@ class Visualization:
         self.val_to_paint = 0.1
 
     def set_channels(self, chindices):
-        self.chindices = chindices
+        self.chinds = chindices
 
     @ti.kernel
     def add_val_to_loc(self,
@@ -74,12 +69,12 @@ class Visualization:
 
 
     @ti.kernel
-    def write_to_renderer(self, mem: ti.types.ndarray(), max_vals: ti.types.ndarray(), chindices: ti.template()):
+    def write_to_renderer(self, mem: ti.types.ndarray(), max_vals: ti.types.ndarray(), chinds: ti.types.ndarray()):
         for i, j in self.image:
             xind = (i//self.scale) % self.w
             yind = (j//self.scale) % self.h
             for k in ti.static(range(3)):
-                chid = chindices[k]
+                chid = chinds[k]
                 self.image[i, j][k] = mem[0, chid, xind, yind] / max_vals[k]
 
     def opt_window(self, sub_w):
@@ -124,8 +119,8 @@ class Visualization:
                 self.prev_time = current_time  # Update the time of the last action
                 self.prev_pos = current_pos
 
-            max_vals = torch.tensor([self.substrate.mem[0, ch].max() for ch in self.chindices])
-            self.write_to_renderer(self.substrate.mem, max_vals, self.chindices)
+            max_vals = torch.tensor([self.substrate.mem[0, ch].max() for ch in self.chinds])
+            self.write_to_renderer(self.substrate.mem, max_vals, self.chinds)
         self.render_opt_window()
         self.canvas.set_image(self.image)
         self.window.show()
