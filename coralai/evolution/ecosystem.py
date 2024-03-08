@@ -1,6 +1,5 @@
 import torch
 import neat
-import taichi as ti
 
 class Ecosystem():
     def __init__(self, substrate, create_organism, apply_physics, min_size=5, max_size=30):
@@ -26,26 +25,6 @@ class Ecosystem():
         self.time_step = 0
         self.out_mem = None
         self.total_energy_added = 0.0
-
-
-    # @ti.kernel
-    # def apply_many_weights_and_biases(self, mem: ti.types.ndarray(), out_mem: ti.types.ndarray(),
-    #                                     kernel: ti.types.ndarray(), sense_chinds: ti.types.ndarray(),
-    #                                     all_weights: ti.types.ndarray(), all_biases: ti.types.ndarray(),
-    #                                     ti_inds: ti.template()):
-    #     inds = ti_inds[None]
-    #     for i, j, act_k in ti.ndrange(mem.shape[2], mem.shape[3], out_mem.shape[0]):
-    #         val = 0.0
-    #         ind_of_genome = 0
-    #         for g_i in ti.ndrange(genome_keys.shape[0]):
-    #             if genome_keys[g_i] == mem[0, inds.genome, i, j]:
-    #                 ind_of_genome = g_i
-
-    #         for sensor_n, off_m in ti.ndrange(sense_chinds.shape[0], kernel.shape[0]):
-    #             neigh_x = (i + kernel[off_m, 0]) % mem.shape[2]
-    #             neigh_y = (j + kernel[off_m, 1]) % mem.shape[3]
-    #             val += mem[0, sense_chinds[sensor_n], neigh_x, neigh_y] * weights[0, act_j, sensor_n]
-    #         out_mem[act_j, center_x, center_y] = val + biases[0, act_j, 0]
 
     
     def gen_random_pop(self, num_organisms):
@@ -156,8 +135,8 @@ class Ecosystem():
                 self.substrate.mem[0, inds.genome, coords[0][0], coords[0][1]] = new_genome_key
     
     
-    # def save_population(self):
-
+    def save_population(self):
+        pass
 
 
     def update(self, seed_interval=100, seed_volume=10, radiation_interval=500, radiation_volume=10):

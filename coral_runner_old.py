@@ -65,7 +65,7 @@ def main(config_filename, channels, shape, kernel, sense_chs, act_chs, torch_dev
     def _apply_physics():
         apply_physics(substrate, ecosystem, kernel)
 
-    ecosystem = Ecosystem(substrate, _create_organism, _apply_physics, min_size = 1, max_size=1)
+    ecosystem = Ecosystem(substrate, _create_organism, _apply_physics, min_size = 5)
     vis = CoralVis(substrate, ecosystem, ['energy', "infra", "genome"])
 
     while vis.window.running:
@@ -87,7 +87,7 @@ if __name__ == "__main__":
             "acts": ti.types.struct(
                 invest=ti.f32,
                 liquidate=ti.f32,
-                explore=ti.types.vector(n=5, dtype=ti.f32) # must equal length of kernel
+                explore=ti.types.vector(n=7, dtype=ti.f32) # must equal length of kernel
             ),
             "com": ti.types.struct(
                 a=ti.f32,
@@ -96,11 +96,11 @@ if __name__ == "__main__":
                 d=ti.f32
             ),
         },
-        shape = (10,10),
+        shape = (100,100),
         kernel = [        [0,-1],
                   [-1, 0],[0, 0],[1, 0],
                           [0, 1],        ],
-        sense_chs = ['energy', 'infra', 'com'],
-        act_chs = ['acts', 'com'],
+        sense_chs = ['com'],
+        act_chs = ['com'],
         torch_device = torch_device
     )

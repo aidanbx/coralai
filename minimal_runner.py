@@ -53,7 +53,7 @@ def main():
     organism = organism_hyper
     
     if organism.is_evolvable:
-        organism.set_genome(genome_key, organism.gen_random_genome())
+        organism.set_genome(genome_key, organism.gen_random_genome(0))
         organism.create_torch_net()
     
     while vis.window.running:
@@ -63,7 +63,7 @@ def main():
             organism.forward(substrate.mem)
         vis.update()
         if vis.mutating:
-            new_genome = organism.mutate(vis.perturbation_strength)
+            new_genome = organism.mutate()
             if organism.is_evolvable:
                 organism.set_genome(organism.genome_key, new_genome) # mutates all cells at once
                 organism.create_torch_net()

@@ -56,16 +56,9 @@ class HyperOrganism(NeatOrganism):
         return neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                            neat.DefaultSpeciesSet, neat.DefaultStagnation,
                            temp_config_path)
-    
-
-    def c(self, fitness):
-        self.genome.fitness = fitness
 
 
-    def create_torch_net(self, batch_size = None):
-        if batch_size is None:
-            batch_size=self.substrate.w*self.substrate.h
-
+    def create_torch_net(self):
         input_coords = []
         for offset in self.kernel:
             for ch in range(self.n_senses):
@@ -83,7 +76,6 @@ class HyperOrganism(NeatOrganism):
             output_coords=output_coords,
             weight_threshold=0.0,
             weight_max=3.0,
-            batch_size=batch_size,
             activation=identity_activation,
             cppn_activation=identity_activation,
             device=self.torch_device,

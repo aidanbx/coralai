@@ -1,13 +1,9 @@
 import torch
+import matplotlib.pyplot as plt
 
-live_genomes = torch.tensor([1, 2, 3], device="mps")  # Example tensor for live genomes
-substrate_mem = torch.tensor([[0, 1, 2, 3, 4],
-                              [9, 9, 9, 9, 9],
-                              [9, 9, 9, 9, 9],
-                              [9, 9, 9, 9, 9]], device="mps")  # Example tensor for substrate memory
+# Sample from the distribution
+tensor = (torch.randn(10000)-1) * 0.1
 
-t = substrate_mem * 1
-t[:] = 999
-print(t)
-print(substrate_mem)
-
+flat_np = tensor.flatten().numpy()
+plt.hist(tensor.numpy(), bins=100)
+plt.show()

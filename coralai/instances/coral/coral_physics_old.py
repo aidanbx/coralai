@@ -32,9 +32,9 @@ def energy_physics(substrate, kernel):
     substrate.mem[0, inds.energy] = energy_out_mem
 
 
-def invest_liquidate(substrate):
+def invest_liquidate(substrate, live_mask):
     inds = substrate.ti_indices[None]
-    substrate.mem[0, [inds.acts_invest, inds.acts_liquidate]] = torch.softmax(substrate.mem[0, [inds.acts_invest, inds.acts_liquidate]], dim=0)
+    substrate.mem[0, [inds.acts_invest, inds.acts_liquidate]] = torch.softmax(substrate.mem[0, [inds.acts_invest, inds.acts_liquidate]], dim=0) * live_mask
     investments = substrate.mem[0, inds.acts_invest] * substrate.mem[0, inds.energy]
     liquidations = substrate.mem[0, inds.acts_liquidate] * substrate.mem[0, inds.infra]
     substrate.mem[0, inds.energy] += liquidations - investments
@@ -42,7 +42,7 @@ def invest_liquidate(substrate):
 
 
 @ti.kernel
-def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
+def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(), live_mask: ti.types.ndarray(),
             infra_delta: ti.types.ndarray(), winning_genomes: ti.types.ndarray(),
             kernel: ti.types.ndarray(), explore_inds: ti.types.ndarray(), ti_inds: ti.template()):
     # incoming investments
@@ -56,6 +56,8 @@ def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
             neigh_x = (center_x + offset_x) % mem.shape[2]
             neigh_y = (center_y + offset_y) % mem.shape[3]
 
+            if live_mask[neigh_x, neigh_y] == 0:
+                continue
             neigh_max_act_i = max_act_i[neigh_x, neigh_y]
             bid = 0.0
             # if neigh's explore dir points towards this center
@@ -75,15 +77,22 @@ def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
         winning_genomes[center_x, center_y] = winning_genome
 
 
-def explore_physics(substrate, kernel):
+# def handle_investment(substrate, investments):
+#     inds = substrate.ti_indices[None]
+#     # remove energy where investments are negative, convert investments to infra where positive
+#     substrate.mem[0, inds.energy] = torch.where(investments < 0, substrate.mem[0, inds.energy] - investments, substrate.mem[0, inds.energy])
+#     substrate.mem[0, inds.infra] += torch.where(investments > 0, substrate.mem[0, inds.infra] + torch.log(investments+1), substrate.mem[0, inds.infra])
+
+
+def explore_physics(substrate, live_mask, kernel):
     inds = substrate.ti_indices[None]
-    substrate.mem[0, inds.acts_explore] = torch.softmax(substrate.mem[0, inds.acts_explore], dim=1)
+    substrate.mem[0, inds.acts_explore] = torch.softmax(substrate.mem[0, inds.acts_explore], dim=1) * live_mask
     max_act_i = torch.argmax(substrate.mem[0, inds.acts_explore], dim=0) # be warned, this is the index of the actuator not the index in memory, so 0-6 not
     infra_delta = torch.zeros_like(substrate.mem[0, inds.infra])
     winning_genome = substrate.mem[0, inds.genome] * 1
     # This is intermediate storage for each cell in the kernel to use:
     explore_inds = torch.tensor(inds.acts_explore)
-    explore(substrate.mem, max_act_i,
+    explore(substrate.mem, max_act_i, live_mask,
             infra_delta, winning_genome,
             kernel, explore_inds, substrate.ti_indices)
     # handle_investment(substrate, infra_delta)
@@ -104,6 +113,7 @@ def get_live_cell_mask(mem: ti.types.ndarray(), live_mask: ti.types.ndarray(),
         if is_alive == 0:
             mem[0, inds.genome, i, j] = -1
 
+
 def apply_physics(substrate, ecosystem, kernel):
     inds = substrate.ti_indices[None]
 
@@ -117,8 +127,8 @@ def apply_physics(substrate, ecosystem, kernel):
     substrate.mem[0, inds.energy] += torch.randn_like(substrate.mem[0, inds.energy]) * 0.1
 
     invest_liquidate(substrate, live_mask)
-    to_convert = substrate.mem[0, inds.infra] * (torch.randn_like(substrate.mem[0, inds.energy]))**2
-    substrate.mem[0, inds.infra] -= to_convert
-    substrate.mem[0, inds.energy] += to_convert
+    # to_convert = substrate.mem[0, inds.infra] * (torch.randn_like(substrate.mem[0, inds.energy])+1) * 0.1
+    # substrate.mem[0, inds.infra] -= to_convert
+    # substrate.mem[0, inds.energy] += to_convert
     explore_physics(substrate, live_mask, kernel)
     energy_physics(substrate, kernel)

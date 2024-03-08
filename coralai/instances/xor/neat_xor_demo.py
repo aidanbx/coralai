@@ -40,8 +40,6 @@ def run(config_filename='xor_neat.config', output_dir='neat_output', checkpoint_
     checkpoint_dir = os.path.join(output_dir, 'checkpoints')
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-
-
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(checkpoint_dir, exist_ok=True)
 
