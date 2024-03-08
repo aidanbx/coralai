@@ -79,7 +79,7 @@ def main(config_filename, channels, shape, kernel, sense_chs, act_chs, torch_dev
     def _apply_physics():
         substrate.mem[:, ecosystem.act_chinds] = nca_activation(substrate.mem[:, ecosystem.act_chinds])
 
-    ecosystem = Ecosystem(substrate, _create_organism, _apply_physics, min_size = 1)
+    ecosystem = Ecosystem(substrate, _create_organism, _apply_physics, pop_size=3)
     vis = CoralVis(substrate, ecosystem, [('rgb', 'r'), ('rgb', 'g'), ('rgb', 'b')])
     # out_mem = torch.zeros_like(substrate.mem[0, organism.act_chinds])
     genome_key = 0
@@ -93,7 +93,7 @@ def main(config_filename, channels, shape, kernel, sense_chs, act_chs, torch_dev
         #     combined_coords = torch.stack((coords[0], coords[1]), dim=1).contiguous()
 
         substrate.mem[0, inds.rgb] += torch.rand_like(substrate.mem[0, inds.rgb]) * 0.1
-        ecosystem.update()
+        ecosystem.update(seed_interval=10, seed_volume=100)
         vis.update()
         if vis.mutating:
             new_genome_key = ecosystem.mutate(genome_key, report=True)
@@ -111,7 +111,7 @@ if __name__ == "__main__":
         config_filename="coralai/instances/nca/nca_neat.config",
         channels={
             "rgb": ti.types.struct(r=ti.f32, g=ti.f32, b=ti.f32),
-            "hidden": ti.types.vector(n=2, dtype=ti.f32),
+            "hidden": ti.types.vector(n=10, dtype=ti.f32),
             "genome": ti.f32,
         },
         shape=(80, 80),
