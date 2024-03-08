@@ -14,8 +14,8 @@ class CoralVis(Visualization):
     def render_opt_window(self):
         inds = self.substrate.ti_indices[None]
         self.canvas.set_background_color((1, 1, 1))
-        opt_w = min(380 / self.img_w, self.img_w)
-        opt_h = min(640 / self.img_h, self.img_h * 2)
+        opt_w = min(480 / self.img_w, self.img_w)
+        opt_h = min(340 / self.img_h, self.img_h * 2)
         with self.gui.sub_window("Options", 0.05, 0.05, opt_w, opt_h) as sub_w:
             self.opt_window(sub_w)
             current_pos = self.window.get_cursor_pos()
@@ -32,17 +32,17 @@ class CoralVis(Visualization):
             sub_w.text(f"Energy Offset: {self.ecosystem.energy_offset}")
 
 
-def main(config_filename, channels, shape, kernel, sense_chs, act_chs, torch_device):
+def main(config_filename, channels, shape, kernel, ind_of_middle, sense_chs, act_chs, torch_device):
     kernel = torch.tensor(kernel, device=torch_device)
     local_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(local_dir, config_filename)
     substrate = Substrate(shape, torch.float32, torch_device, channels)
     substrate.malloc()
 
-    neat_evolver = NEATEvolver(config_path, substrate, kernel, sense_chs, act_chs,)
+    neat_evolver = NEATEvolver(config_path, substrate, kernel, ind_of_middle, sense_chs, act_chs,)
     
     def eval_vis(genomes, config):
-        vis = CoralVis(substrate, neat_evolver, ["energy", "infra", ("com", "a")])
+        vis = CoralVis(substrate, neat_evolver, ["energy", "infra", "genome"])
         import random
         random_steps = random.randint(100, 500)
         neat_evolver.eval_genomes(genomes, config, random_steps, vis)
@@ -70,10 +70,11 @@ if __name__ == "__main__":
                 d=ti.f32
             ),
         },
-        shape = (400, 400),
+        shape = (200, 200),
         kernel = [        [0,-1],
                   [-1, 0],[0, 0],[1, 0],
                           [0, 1],        ],
+        ind_of_middle = 2,
         sense_chs = ['energy', 'infra', 'com'],
         act_chs = ['acts', 'com'],
         torch_device = torch_device

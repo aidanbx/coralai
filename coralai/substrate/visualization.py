@@ -79,8 +79,8 @@ class Visualization:
             xind = (i//self.scale) % self.w
             yind = (j//self.scale) % self.h
             for k in ti.static(range(3)):
-                chid = chindices[k%self.n_channels]
-                self.image[i, j][k] = mem[0, chid, xind, yind]
+                chid = chindices[k]
+                self.image[i, j][k] = mem[0, chid, xind, yind] / max_vals[k]
 
     def opt_window(self, sub_w):
         self.channel_to_paint = sub_w.slider_int("Paint channel: " +

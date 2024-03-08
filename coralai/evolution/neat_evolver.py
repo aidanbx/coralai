@@ -17,7 +17,7 @@ from ..substrate.nn_lib import ch_norm
 
 @ti.data_oriented
 class NEATEvolver():
-    def __init__(self, config_path, substrate, kernel, sense_chs, act_chs):
+    def __init__(self, config_path, substrate, kernel, ind_of_middle, sense_chs, act_chs):
         self.substrate = substrate
         torch_device = substrate.torch_device
         self.substrate = substrate
@@ -31,6 +31,8 @@ class NEATEvolver():
         self.act_chs = act_chs
         self.act_chinds = substrate.windex[act_chs]
         self.n_acts = len(self.act_chinds)
+
+        self.ind_of_middle = ind_of_middle
 
         self.neat_config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                            neat.DefaultSpeciesSet, neat.DefaultStagnation,
@@ -65,21 +67,27 @@ class NEATEvolver():
         inds = self.substrate.ti_indices[None]
         for i in range(len(organisms)):
             org = organisms[i]
-            org['genome'].fitness = (self.get_genome_infra_sum(i)).item()
-
+            org['genome'].fitness = self.substrate.mem[0, inds.genome].eq(i).sum().item()
+            # org['genome'].fitness = (self.get_genome_infra_sum(i)).item()
 
     def run_sim(self, organisms, n_timesteps, vis = None):
         inds = self.substrate.ti_indices[None]
-        self.substrate.mem[0, inds.genome,...] = -1
+        # set 20% of cells to genome -1
+        self.substrate.mem[0, inds.genome] = torch.where(
+            torch.rand_like(self.substrate.mem[0, inds.genome]) > 0.99,
+            torch.randint_like(self.substrate.mem[0, inds.genome], 0, len(organisms)),
+            -1
+        )
+
         combined_weights = torch.zeros(
             (len(organisms), 1, self.n_acts, self.n_senses * self.kernel.shape[0]), device=self.torch_device)
         combined_biases = torch.zeros(
             (len(organisms), 1, self.n_acts, 1), device=self.torch_device)
+        
         for i in range(len(organisms)):
             combined_weights[i, 0] = organisms[i]["net"].weights
             combined_biases[i, 0] = organisms[i]["net"].biases
 
-        self.substrate.mem[0, inds.genome] = torch.randint_like(self.substrate.mem[0, inds.genome], 0, len(organisms))
         out_mem = torch.zeros_like(self.substrate.mem[0, self.act_chinds])
         for timestep in range(n_timesteps):
             self.step_sim(combined_weights, combined_biases, out_mem, timestep)
@@ -99,8 +107,13 @@ class NEATEvolver():
         self.energy_offset = self.get_energy_offset(timestep)
         self.substrate.mem[0, inds.energy] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + self.energy_offset) * 0.1
         self.substrate.mem[0, inds.infra] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + self.energy_offset) * 0.1
+        self.apply_physics()
+    
+
+    def apply_physics(self):
+        inds = self.substrate.ti_indices[None]
         invest_liquidate(self.substrate)
-        explore_physics(self.substrate, self.kernel)
+        explore_physics(self.substrate, self.kernel, self.ind_of_middle)
         energy_physics(self.substrate, self.kernel)
 
 
