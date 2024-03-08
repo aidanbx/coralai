@@ -1,5 +1,7 @@
+import json
 import warnings
 import torch
+import os
 import taichi as ti
 import numpy as np
 from ..utils.ti_struct_factory import TaichiStructFactory
@@ -26,6 +28,23 @@ class Substrate:
         self.ti_lims_builder = TaichiStructFactory()
         self.ti_indices = -1
         self.ti_lims = -1
+
+    def save_metadata_to_json(self, filepath):
+        """
+        Saves the substrate configuration (channels, channel metadata, dimensions, dtypes, etc.) to a file.
+        """
+        config = {
+            "shape": self.shape,
+            "torch_dtype": str(self.torch_dtype),
+            "torch_device": str(self.torch_device),
+            "channels": {chid: {"ti_dtype": str(ch.ti_dtype), **ch.metadata} for chid, ch in self.channels.items()}
+        }
+        with open(filepath, 'w') as f:
+            json.dump(config, f, indent=4)
+
+    def save_mem_to_pt(self, filepath):
+        # Saves channels, channel metadata, dims, dtypes, etc
+        torch.save(self.mem, filepath)
 
     def index_to_chname(self, index):
         return self.windex.index_to_chname(index)

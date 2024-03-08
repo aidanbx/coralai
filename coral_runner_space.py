@@ -3,7 +3,7 @@ import torch
 import neat
 import taichi as ti
 from coralai.substrate.substrate import Substrate
-from coralai.evolution.neat_evolver import NEATEvolver
+from coralai.evolution.space_evolver import SpaceEvolver
 from coralai.substrate.visualization import Visualization
 
 class CoralVis(Visualization):
@@ -40,26 +40,26 @@ class CoralVis(Visualization):
                 f"Infra: {self.substrate.mem[0, inds.infra, pos_x, pos_y]:.2f}\n"
                 # f"Acts: {self.substrate.mem[0, inds.acts, pos_x, pos_y]}"
             )
+            sub_w.text(f"TIMESTEP: {self.evolver.timestep}")
             tot_energy = torch.sum(self.substrate.mem[0, inds.energy])
             tot_infra = torch.sum(self.substrate.mem[0, inds.infra])
             sub_w.text(f"Total Energy+Infra: {tot_energy + tot_infra}")
             sub_w.text(f"Percent Energy: {(tot_energy / (tot_energy + tot_infra)) * 100}")
             sub_w.text(f"Energy Offset: {self.evolver.energy_offset}")
-            sub_w.text(f"# Infra in Genomes ({len(self.evolver.organisms)} total):")
+            sub_w.text(f"# Infra in Genomes ({len(self.evolver.genomes)} total):")
 
             if self.evolver.timestep % 20 == 0:
                 self.genome_stats = []
-                for i in range(len(self.evolver.organisms)):
-                    # n_cells = self.substrate.mem[0, inds.genome].eq(i).sum().item()
-                    n_cells = self.evolver.get_genome_infra_sum(i)
+                for i in range(len(self.evolver.genomes)):
+                    n_cells = self.substrate.mem[0, inds.genome].eq(i).sum().item()
+                    # n_cells = self.evolver.get_genome_infra_sum(i)
                     self.genome_stats.append((i, n_cells))
                 self.genome_stats.sort(key=lambda x: x[1], reverse=True)
             for i, n_cells in self.genome_stats:
                 sub_w.text(f"  {i}: {n_cells:.2f}")
 
 
-def main(config_filename, channels, shape, kernel, ind_of_middle, sense_chs, act_chs, torch_device):
-    kernel = torch.tensor(kernel, device=torch_device)
+def main(config_filename, channels, shape, kernel, dir_order, sense_chs, act_chs, torch_device):
     local_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(local_dir, config_filename)
     substrate = Substrate(shape, torch.float32, torch_device, channels)
@@ -67,16 +67,11 @@ def main(config_filename, channels, shape, kernel, ind_of_middle, sense_chs, act
 
     inds = substrate.ti_indices[None]
 
-    neat_evolver = NEATEvolver(config_path, substrate, kernel, ind_of_middle, sense_chs, act_chs,)
+    space_evolver = SpaceEvolver(config_path, substrate, kernel, dir_order, sense_chs, act_chs,)
     
-    def eval_vis(genomes, config):
-        vis = CoralVis(substrate, neat_evolver, ["energy", "infra", "genome"])
-        import random
-        random_steps = random.randint(500, 1000)
-        neat_evolver.eval_genomes(genomes, random_steps, vis)
+    vis = CoralVis(substrate, space_evolver, ["energy", "infra", "rot"])
+    space_evolver.run(100000000, vis, n_rad_spots = 10, radiate_interval = 20)
     
-    neat_evolver.gen_population()
-    neat_evolver.population.run(eval_vis, 500)
     # checkpoint_file = os.path.join('history', 'NEAT_240308-0052_32', 'checkpoint4')
     # p = neat.Checkpointer.restore_checkpoint(checkpoint_file)
     # p.run(eval_vis, 10)
@@ -93,7 +88,7 @@ if __name__ == "__main__":
             "acts": ti.types.struct(
                 invest=ti.f32,
                 liquidate=ti.f32,
-                explore=ti.types.vector(n=5, dtype=ti.f32) # must equal length of kernel
+                explore=ti.types.vector(n=4, dtype=ti.f32) # no, forward, left, right
             ),
             "com": ti.types.struct(
                 a=ti.f32,
@@ -101,13 +96,12 @@ if __name__ == "__main__":
                 c=ti.f32,
                 d=ti.f32
             ),
+            "rot": ti.f32,
             "genome": ti.f32,
         },
-        shape = (200, 200),
-        kernel = [[0, 0], [0, -1], [0, 1],
-                  [1, 0], [1, -1], [1, 1],
-                  [-1, 0],[-1,-1],[-1, 1]],
-        ind_of_middle = 0,
+        shape = (400, 400),
+        kernel = [[0, 0], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]], # ccw
+        dir_order = [0, -1, 1], # forward (with rot), left of rot, right of rot
         sense_chs = ['energy', 'infra', 'com'],
         act_chs = ['acts', 'com'],
         torch_device = torch_device
