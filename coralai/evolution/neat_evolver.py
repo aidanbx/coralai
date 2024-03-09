@@ -120,7 +120,7 @@ class NEATEvolver():
 
     def apply_physics(self):
         inds = self.substrate.ti_indices[None]
-        # self.substrate.mem[0, inds.energy, self.substrate.mem.shape[2]//2, self.substrate.mem.shape[3]//2] += 10
+        # self.substrate.mem[0, inds.energy, self.substrate.w//2, self.substrate.h//2] += 10
         activate_outputs(self.substrate, self.ind_of_middle)
         invest_liquidate(self.substrate)
         explore_physics(self.substrate, self.kernel)
@@ -135,11 +135,11 @@ class NEATEvolver():
 
     def kill_random_chunk(self, width):
         inds = self.substrate.ti_indices[None]
-        x = np.random.randint(0, self.substrate.mem.shape[2])
-        y = np.random.randint(0, self.substrate.mem.shape[3])
+        x = np.random.randint(0, self.substrate.w)
+        y = np.random.randint(0, self.substrate.h)
         for i in range(x-width, x+width):
             for j in range(y-width, y+width):
-                self.substrate.mem[0, inds.genome, i%self.substrate.mem.shape[2], j%self.substrate.mem.shape[3]] = -1
+                self.substrate.mem[0, inds.genome, i%self.substrate.w, j%self.substrate.h] = -1
 
 
     def get_energy_offset(self, timestep, repeat_steps=50, amplitude=1, positive_scale=1, negative_scale=1):
