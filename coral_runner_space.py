@@ -52,11 +52,12 @@ class CoralVis(Visualization):
                 self.genome_stats = []
                 for i in range(len(self.evolver.genomes)):
                     n_cells = self.substrate.mem[0, inds.genome].eq(i).sum().item()
+                    age = self.evolver.ages[i]
                     # n_cells = self.evolver.get_genome_infra_sum(i)
-                    self.genome_stats.append((i, n_cells))
+                    self.genome_stats.append((i, n_cells, age))
                 self.genome_stats.sort(key=lambda x: x[1], reverse=True)
-            for i, n_cells in self.genome_stats:
-                sub_w.text(f"  {i}: {n_cells:.2f}")
+            for i, n_cells, age in self.genome_stats:
+                sub_w.text(f"\tG{i}: {n_cells:.2f} cells, {age:.2f} age")
 
 
 def main(config_filename, channels, shape, kernel, dir_order, sense_chs, act_chs, torch_device):
@@ -67,10 +68,11 @@ def main(config_filename, channels, shape, kernel, dir_order, sense_chs, act_chs
 
     inds = substrate.ti_indices[None]
 
-    space_evolver = SpaceEvolver(config_path, substrate, kernel, dir_order, sense_chs, act_chs,)
+    space_evolver = SpaceEvolver(config_path, substrate, kernel, dir_order, sense_chs, act_chs)
     
     vis = CoralVis(substrate, space_evolver, ["energy", "infra", "rot"])
-    space_evolver.run(100000000, vis, n_rad_spots = 10, radiate_interval = 20)
+    space_evolver.run(100000000, vis, n_rad_spots = 5, radiate_interval = 50,
+                      cull_max_pop=100, cull_interval=50)
     
     # checkpoint_file = os.path.join('history', 'NEAT_240308-0052_32', 'checkpoint4')
     # p = neat.Checkpointer.restore_checkpoint(checkpoint_file)
