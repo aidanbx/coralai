@@ -30,14 +30,9 @@ class Substrate:
         self.ti_lims = -1
 
     def save_metadata_to_json(self, filepath):
-        """
-        Saves the substrate configuration (channels, channel metadata, dimensions, dtypes, etc.) to a file.
-        """
         config = {
             "shape": self.shape,
-            "torch_dtype": str(self.torch_dtype),
-            "torch_device": str(self.torch_device),
-            "channels": {chid: {"ti_dtype": str(ch.ti_dtype), **ch.metadata} for chid, ch in self.channels.items()}
+            "windex": self.windex.index_tree
         }
         with open(filepath, 'w') as f:
             json.dump(config, f, indent=4)

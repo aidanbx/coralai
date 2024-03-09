@@ -5,6 +5,7 @@ import random
 import numpy as np
 from neat.reporting import ReporterSet
 from neat.reporting import BaseReporter
+import pickle
 
 import torch
 import neat
@@ -59,7 +60,24 @@ class SpaceEvolver():
         self.init_population()
         self.init_substrate(self.genomes)
         self.time_last_cull = 0
-    
+
+
+        self.add_reporter(neat.StdOutReporter(True))
+        self.add_reporter(neat.StatisticsReporter())
+
+        current_datetime = datetime.now().strftime("%y%m%d-%H%M_%S")
+        self.checkpoint_dir = f'history/space_evolver_run_{current_datetime}'
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        checkpoint_prefix_full = os.path.join(self.checkpoint_dir, f"checkpoint")
+        self.add_reporter(neat.Checkpointer(generation_interval=5, filename_prefix=checkpoint_prefix_full))
+        # Copy config from config_path to checkpoint_dir
+        with open(config_path, "r") as f:
+            config_str = f.read()
+        with open(os.path.join(self.checkpoint_dir, "neat_config"), "w") as f:
+            f.write(config_str)
+        self.substrate.save_metadata_to_json(filepath = os.path.join(self.checkpoint_dir, "sub_meta"))
+
+
 
     def run(self, n_timesteps, vis, n_rad_spots, radiate_interval, cull_max_pop, cull_interval=100):
         timestep = 0
@@ -67,7 +85,7 @@ class SpaceEvolver():
             combined_weights = torch.stack(self.combined_weights, dim=0)
             combined_biases = torch.stack(self.combined_biases, dim=0)
             self.step_sim(combined_weights, combined_biases)
-            # self.report_if_necessary(timestep)
+            self.report_if_necessary(timestep)
             vis.update()
             if timestep % radiate_interval == 0:
                 self.apply_radiation_mutation(n_rad_spots)
@@ -88,13 +106,35 @@ class SpaceEvolver():
         self.forward(combined_weights, combined_biases)
         self.energy_offset = self.get_energy_offset(self.timestep)
         self.ages = [age + 1 for age in self.ages]
-        self.substrate.mem[0, inds.energy] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + self.energy_offset) * 0.1
-        self.substrate.mem[0, inds.infra] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + self.energy_offset) * 0.1
+        # self.substrate.mem[0, inds.energy] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + self.energy_offset) * 0.1
+        # self.substrate.mem[0, inds.infra] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + self.energy_offset) * 0.1
         self.substrate.mem[0, inds.energy] = torch.clamp(self.substrate.mem[0, inds.energy], 0.01, 100)
         self.substrate.mem[0, inds.infra] = torch.clamp(self.substrate.mem[0, inds.infra], 0.01, 100)
-        if self.timestep % 50 == 0:
+        if self.timestep % 10 == 0:
             self.kill_random_chunk(5)
-    
+            self.grow_random_chunk(5)
+
+
+    def kill_random_chunk(self, radius):
+        inds = self.substrate.ti_indices[None]
+        x = np.random.randint(0, self.substrate.w)
+        y = np.random.randint(0, self.substrate.h)
+        for i in range(x-radius, x+radius):
+            for j in range(y-radius, y+radius):
+                self.substrate.mem[0, inds.genome, i%self.substrate.w, j%self.substrate.h] = -1
+                self.substrate.mem[0, inds.infra, i%self.substrate.w, j%self.substrate.h] = 0.01
+                self.substrate.mem[0, inds.energy, i%self.substrate.w, j%self.substrate.h] = 0.01
+
+
+    def grow_random_chunk(self, radius, energy_val = 5, infra_val = 5):
+        inds = self.substrate.ti_indices[None]
+        x = np.random.randint(0, self.substrate.w)
+        y = np.random.randint(0, self.substrate.h)
+        for i in range(x-radius, x+radius):
+            for j in range(y-radius, y+radius):
+                self.substrate.mem[0, inds.infra, i%self.substrate.w, j%self.substrate.h] = energy_val
+                self.substrate.mem[0, inds.energy, i%self.substrate.w, j%self.substrate.h] = infra_val
+
 
     def forward(self, weights, biases):
         inds = self.substrate.ti_indices[None]
@@ -192,14 +232,47 @@ class SpaceEvolver():
             self.init_substrate(self.genomes)
 
 
-    def save_checkpoint(self, folderpath):
-        # Saves population, substrate (mem and metadata)
-        pass
+    def load_checkpoint(self, folderpath):
+        config_path = os.path.join(folderpath, "..", "neat_config")
+        self.neat_config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
+                                        neat.DefaultSpeciesSet, neat.DefaultStagnation,
+                                        config_path)
+        self.load_genomes(os.path.join(folderpath, "genomes"))
+        with open(os.path.join(folderpath, "ages"), 'rb') as f:
+            self.ages = pickle.load(f)
+
+        self.combined_biases = []
+        self.combined_weights = []
+        for genome in self.genomes:
+            genome.fitness = 0.0
+            net = self.create_torch_net(genome)
+            self.combined_biases.append(net.biases)
+            self.combined_weights.append(net.weights) 
+        loaded_mem = torch.load(os.path.join(folderpath, "sub_mem"))
+        self.substrate.mem = loaded_mem
+
+        
+    def save_genomes(self, genomes, filename):
+        with open(filename, 'wb') as f:
+            pickle.dump(self.genomes, f)
     
-    def report_if_necessary(self, fitness_function, n=None):
-        for i in range(len(self.genomes)):
-            # org['genome'].fitness += self.substrate.mem[0, inds.genome].eq(i).sum().item()
-            self.genomes[i].fitness = fitness_function(self.genomes[i], i)
+    def load_genomes(self, filename):
+        with open(filename, 'rb') as f:
+            genomes = pickle.load(f)
+        return genomes
+    
+    def report_if_necessary(self, timestep):
+        if timestep % 500 == 0:
+            timestep_dir = os.path.join(self.checkpoint_dir, f"step_{timestep}")
+            os.makedirs(timestep_dir, exist_ok=True)
+            self.substrate.save_mem_to_pt(filepath = os.path.join(timestep_dir, "sub_mem"))
+            self.save_genomes(self.genomes, os.path.join(timestep_dir, "genomes"))
+            with open(os.path.join(timestep_dir, "ages"), 'wb') as f:
+                pickle.dump(self.ages, f)
+
+        # for i in range(len(self.genomes)):
+        #     # org['genome'].fitness += self.substrate.mem[0, inds.genome].eq(i).sum().item()
+        #     self.genomes[i].fitness = fitness_function(self.genomes[i], i)
         # self.reporters.start_generation(self.generation)
 
         # # Evaluate all genomes using the user-provided function.
@@ -247,22 +320,13 @@ class SpaceEvolver():
             genome.configure_new(self.neat_config.genome_config)
             self.add_organism_get_key(genome)
 
-        self.add_reporter(neat.StdOutReporter(True))
-        self.add_reporter(neat.StatisticsReporter())
-
-        current_datetime = datetime.now().strftime("%y%m%d-%H%M_%S")
-        self.checkpoint_dir = f'history/NEAT_{current_datetime}'
-        os.makedirs(self.checkpoint_dir, exist_ok=True)
-        checkpoint_prefix_full = os.path.join(self.checkpoint_dir, f"checkpoint")
-        self.add_reporter(neat.Checkpointer(generation_interval=5, filename_prefix=checkpoint_prefix_full))
-
         return genomes
 
 
     def init_substrate(self, genomes):
         inds = self.substrate.ti_indices[None]
         self.substrate.mem[0, inds.genome] = torch.where(
-            torch.rand_like(self.substrate.mem[0, inds.genome]) > 0.8,
+            torch.rand_like(self.substrate.mem[0, inds.genome]) > 0.95,
             torch.randint_like(self.substrate.mem[0, inds.genome], 0, len(genomes)),
             -1
         )
@@ -286,13 +350,7 @@ class SpaceEvolver():
         self.substrate.mem[0, inds.genome, x%self.substrate.w, y%self.substrate.h] = genome_key
         for i in range(x-radius, x+radius):
             for j in range(y-radius, y+radius):
-                self.substrate.mem[0, inds.genome, i%self.substrate.w, j%self.substrate.h] = genome_key
-
-
-    def kill_random_chunk(self, radius):
-        x = np.random.randint(0, self.substrate.w)
-        y = np.random.randint(0, self.substrate.h)
-        self.set_chunk(-1, x, y, radius)
+                self.substrate.mem[0, inds.genome, i%self.substrate.w, j%self.substrate.h] = genome_key        
 
 
     def get_energy_offset(self, timestep, repeat_steps=50, amplitude=1, positive_scale=1, negative_scale=1):

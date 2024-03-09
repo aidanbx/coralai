@@ -69,8 +69,9 @@ def main(config_filename, channels, shape, kernel, dir_order, sense_chs, act_chs
     inds = substrate.ti_indices[None]
 
     space_evolver = SpaceEvolver(config_path, substrate, kernel, dir_order, sense_chs, act_chs)
-    
-    vis = CoralVis(substrate, space_evolver, ["energy", "infra", "rot"])
+    checkpoint_dir = os.path.join(local_dir, "history", "space_evolver_run_240309-0004_34", "step_500")
+    space_evolver.load_checkpoint(folderpath=checkpoint_dir)
+    vis = CoralVis(substrate, space_evolver, ["energy", "infra", "genome"])
     space_evolver.run(100000000, vis, n_rad_spots = 5, radiate_interval = 50,
                       cull_max_pop=100, cull_interval=50)
     

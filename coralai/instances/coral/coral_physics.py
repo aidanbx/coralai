@@ -51,7 +51,7 @@ def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
     inds = ti_inds[None]
     for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
         winning_genome = mem[0, inds.genome, i, j]
-        max_bid = mem[0, inds.energy, i, j]
+        max_bid = mem[0, inds.infra, i, j]
         winning_rot = mem[0, inds.rot, i, j]
 
         for offset_n in ti.ndrange(dir_kernel.shape[0]): # this order doesn't matter
@@ -70,10 +70,10 @@ def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
             bid = 0.0
             # If neigh's explore dir points towards this center
             if ((neigh_dir_x + dir_kernel[offset_n, 0]) == 0 and (neigh_dir_y + dir_kernel[offset_n, 1]) == 0):
-                bid = mem[0, inds.energy, neigh_x, neigh_y]
-                energy_delta[neigh_x, neigh_y] -= bid # bids are always taken as investment
+                bid = mem[0, inds.infra, neigh_x, neigh_y]
+                infra_delta[neigh_x, neigh_y] -= bid # bids are always taken as investment
                 bid = 0.9 # cost of dooing business
-                infra_delta[i, j] += bid
+                energy_delta[i, j] += bid
                 if bid > max_bid:
                     max_bid = bid
                     winning_genome = mem[0, inds.genome, neigh_x, neigh_y]
