@@ -24,3 +24,5 @@ taichi_examples/
 ./examples/taichi_examples/
 *.mov
 history/
+./writing/
+writing

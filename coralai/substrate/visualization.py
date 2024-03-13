@@ -124,3 +124,5 @@ class Visualization:
         self.render_opt_window()
         self.canvas.set_image(self.image)
         self.window.show()
+
+

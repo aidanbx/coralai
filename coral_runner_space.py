@@ -16,11 +16,16 @@ class CoralVis(Visualization):
 
     def render_opt_window(self):
         inds = self.substrate.ti_indices[None]
+        self.substrate.mem[0, inds.genome_inv] = torch.where(
+            self.substrate.mem[0, inds.genome] < 0,
+            0,
+            1/(self.substrate.mem[0, inds.genome]+1),
+        )
         self.canvas.set_background_color((1, 1, 1))
         opt_w = min(200 / self.img_w, self.img_w)
         opt_h = min(500 / self.img_h, self.img_h * 2)
         with self.gui.sub_window("Options", 0.05, 0.05, opt_w, opt_h) as sub_w:
-            # self.opt_window(sub_w)
+            self.opt_window(sub_w)
             self.next_generation = sub_w.checkbox("Next Generation", self.next_generation)
             self.chinds[0] = sub_w.slider_int(
                 f"R: {self.substrate.index_to_chname(self.chinds[0])}", 
@@ -69,11 +74,11 @@ def main(config_filename, channels, shape, kernel, dir_order, sense_chs, act_chs
     inds = substrate.ti_indices[None]
 
     space_evolver = SpaceEvolver(config_path, substrate, kernel, dir_order, sense_chs, act_chs)
-    checkpoint_dir = os.path.join(local_dir, "history", "space_evolver_run_240309-0004_34", "step_500")
-    space_evolver.load_checkpoint(folderpath=checkpoint_dir)
-    vis = CoralVis(substrate, space_evolver, ["energy", "infra", "genome"])
-    space_evolver.run(100000000, vis, n_rad_spots = 5, radiate_interval = 50,
-                      cull_max_pop=100, cull_interval=50)
+    # checkpoint_dir = os.path.join(local_dir, "history", "space_evolver_run_240310-0027_01", "step_900")
+    # space_evolver.load_checkpoint(folderpath=checkpoint_dir)
+    vis = CoralVis(substrate, space_evolver, ["energy", "infra", "genome_inv"])
+    space_evolver.run(100000000, vis, n_rad_spots = 4, radiate_interval = 20,
+                      cull_max_pop=100, cull_interval=500)
     
     # checkpoint_file = os.path.join('history', 'NEAT_240308-0052_32', 'checkpoint4')
     # p = neat.Checkpointer.restore_checkpoint(checkpoint_file)
@@ -101,11 +106,14 @@ if __name__ == "__main__":
             ),
             "rot": ti.f32,
             "genome": ti.f32,
+            "genome_inv": ti.f32
         },
-        shape = (400, 400),
-        kernel = [[0, 0], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]], # ccw
-        dir_order = [0, -1, 1], # forward (with rot), left of rot, right of rot
+        shape = (100, 100),
+        kernel = [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1]], # ccw
+        dir_order = [0, -1, 1, -2], # forward (with rot), left of rot, right of rot, behind
         sense_chs = ['energy', 'infra', 'com'],
         act_chs = ['acts', 'com'],
         torch_device = torch_device
     )
+
+

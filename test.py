@@ -1,21 +1,37 @@
 import torch
+import taichi as ti
 import numpy as np
 import matplotlib.pyplot as plt
 
+ti.init(ti.metal)
 
-t = torch.tensor([[[[0.0,0,1],
-                   [0,10,0],
-                   [0,0,1]],
-                  [[1,0,3],
-                   [3,0,0],
-                   [2,0,10]],
-                  [[0,0,0],
-                   [0,100,0],
-                   [0,0,0]]
-                  ]])
+t = torch.rand(1,1,4,4) - 0.5
+print(t)
+def ch_norm(input_tensor):
+    # Calculate the mean across batch and channel dimensions
+    mean = input_tensor.mean(dim=(0, 2, 3), keepdim=True)
 
-print(t[0].eq(231))
-t[0,t[0].eq(231)] = 9999
+    # Calculate the variance across batch and channel dimensions
+    var = input_tensor.var(dim=(0, 2, 3), keepdim=True, unbiased=False)
+
+    # Normalize the input tensor
+    input_tensor.sub_(mean).div_(torch.sqrt(var + 1e-5))
+
+    return input_tensor
+
+print(ch_norm(t))
+
+exit()
+
+@ti.kernel
+def a(mem: ti.types.ndarray()):
+    for ox, oy, k in ti.ndrange((-1,1), (-1,1), (0,1)):
+        x = (2+ox) % mem.shape[2]
+        y = (2+oy) % mem.shape[3]
+        mem[0, k, x,y] *= 0
+        mem[0, k, x,y] += 99
+a(t)
+
 print(t)
 
 exit()

@@ -77,7 +77,27 @@ class SpaceEvolver():
             f.write(config_str)
         self.substrate.save_metadata_to_json(filepath = os.path.join(self.checkpoint_dir, "sub_meta"))
 
+    def init_population(self):
+        genomes = []
+        for i in range(self.neat_config.pop_size):
+            genome = neat.DefaultGenome(str(i))
+            genome.configure_new(self.neat_config.genome_config)
+            self.add_organism_get_key(genome)
 
+        return genomes
+
+
+    def init_substrate(self, genomes):
+        inds = self.substrate.ti_indices[None]
+        self.substrate.mem[0, inds.genome] = torch.where(
+            torch.rand_like(self.substrate.mem[0, inds.genome]) > 0.2 ,
+            torch.randint_like(self.substrate.mem[0, inds.genome], 0, len(genomes)),
+            -1
+        )
+        self.substrate.mem[0, inds.genome, self.substrate.w//8:-self.substrate.w//8, self.substrate.h//8:-self.substrate.h//8] = -1
+        self.substrate.mem[0, inds.energy, ...] = 0.5
+        self.substrate.mem[0, inds.infra, ...] = 0.5
+        self.substrate.mem[0, inds.rot] = torch.randint_like(self.substrate.mem[0, inds.rot], 0, self.dir_kernel.shape[0])
 
     def run(self, n_timesteps, vis, n_rad_spots, radiate_interval, cull_max_pop, cull_interval=100):
         timestep = 0
@@ -106,35 +126,41 @@ class SpaceEvolver():
         self.forward(combined_weights, combined_biases)
         self.energy_offset = self.get_energy_offset(self.timestep)
         self.ages = [age + 1 for age in self.ages]
-        # self.substrate.mem[0, inds.energy] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + self.energy_offset) * 0.1
-        # self.substrate.mem[0, inds.infra] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + self.energy_offset) * 0.1
-        self.substrate.mem[0, inds.energy] = torch.clamp(self.substrate.mem[0, inds.energy], 0.01, 100)
-        self.substrate.mem[0, inds.infra] = torch.clamp(self.substrate.mem[0, inds.infra], 0.01, 100)
-        if self.timestep % 10 == 0:
-            self.kill_random_chunk(5)
-            self.grow_random_chunk(5)
+        self.substrate.mem[0, inds.energy] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + (self.energy_offset-2)) * 0.2
+        self.substrate.mem[0, inds.energy] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + (self.energy_offset-2)) * 0.2
+        self.substrate.mem[0, inds.energy] = torch.clamp(self.substrate.mem[0, inds.energy], 0.000001, 10000)
+        self.substrate.mem[0, inds.infra] = torch.clamp(self.substrate.mem[0, inds.infra], 0.000001, 10000)
+        self.substrate.mem[0, inds.rot] += torch.clamp((torch.randn_like(self.substrate.mem[0, inds.rot])*0.1)//1, -1.0, 1.0)
+        self.substrate.mem[0, inds.infra, self.substrate.w//3, self.substrate.h//3] += 1.0
+        self.substrate.mem[0, inds.energy, self.substrate.w//3, self.substrate.h//3] += 1.0
+        self.substrate.mem[0, inds.infra, 2*self.substrate.w//3, 2*self.substrate.h//3] += 1.0
+        self.substrate.mem[0, inds.energy, 2*self.substrate.w//3, 2*self.substrate.h//3] += 1.0
+        self.substrate.mem[0, inds.infra, self.substrate.w//3, 2*self.substrate.h//3] += 1.0
+        self.substrate.mem[0, inds.energy, self.substrate.w//3, 2*self.substrate.h//3] += 1.0
+        self.substrate.mem[0, inds.infra, 2*self.substrate.w//3, self.substrate.h//3] += 1.0
+        self.substrate.mem[0, inds.energy, 2*self.substrate.w//3, self.substrate.h//3] += 1.0
 
+        if self.timestep % 20 == 0:
+            inds_chunk = torch.tensor(self.substrate.windex[['genome', 'infra', 'energy']], device=self.torch_device)
+            kill_vals = torch.tensor([-1, 0.01, 0.01], device=self.torch_device)
+            grow_vals = torch.tensor([-1, 0.01, 3.0], device=self.torch_device)
+            x_kill = np.random.randint(0, self.substrate.w)
+            y_kill = np.random.randint(0, self.substrate.h)
+            out_mem = self.substrate.mem.clone()
+            self.set_chunk(out_mem, x_kill, y_kill, 4, inds_chunk, kill_vals)
+            # x_grow = np.random.randint(0, self.substrate.w)
+            # y_grow = np.random.randint(0, self.substrate.h)
+            # self.set_chunk(out_mem, x_grow, y_grow, 2, inds_chunk, grow_vals)
+            self.substrate.mem = out_mem
 
-    def kill_random_chunk(self, radius):
-        inds = self.substrate.ti_indices[None]
-        x = np.random.randint(0, self.substrate.w)
-        y = np.random.randint(0, self.substrate.h)
-        for i in range(x-radius, x+radius):
-            for j in range(y-radius, y+radius):
-                self.substrate.mem[0, inds.genome, i%self.substrate.w, j%self.substrate.h] = -1
-                self.substrate.mem[0, inds.infra, i%self.substrate.w, j%self.substrate.h] = 0.01
-                self.substrate.mem[0, inds.energy, i%self.substrate.w, j%self.substrate.h] = 0.01
-
-
-    def grow_random_chunk(self, radius, energy_val = 5, infra_val = 5):
-        inds = self.substrate.ti_indices[None]
-        x = np.random.randint(0, self.substrate.w)
-        y = np.random.randint(0, self.substrate.h)
-        for i in range(x-radius, x+radius):
-            for j in range(y-radius, y+radius):
-                self.substrate.mem[0, inds.infra, i%self.substrate.w, j%self.substrate.h] = energy_val
-                self.substrate.mem[0, inds.energy, i%self.substrate.w, j%self.substrate.h] = infra_val
-
+    @ti.kernel
+    def set_chunk(self, out_mem: ti.types.ndarray(), cx: ti.i32, cy: ti.i32, radius: ti.i32,
+                  inds: ti.types.ndarray(), vals: ti.types.ndarray()):
+        for off_x, off_y, k in ti.ndrange((-radius, +radius), (-radius, +radius), inds.shape[0]):
+            x = (cx + off_x) % out_mem.shape[2]
+            y = (cy + off_y) % out_mem.shape[3]
+            out_mem[0, inds[k], x, y] *= 0.0
+            out_mem[0, inds[k], x, y] += vals[k]
 
     def forward(self, weights, biases):
         inds = self.substrate.ti_indices[None]
@@ -149,35 +175,71 @@ class SpaceEvolver():
         self.apply_physics()
     
 
-
     def apply_physics(self):
         inds = self.substrate.ti_indices[None]
         # self.substrate.mem[0, inds.energy, self.substrate.w//2, self.substrate.h//2] += 10
+        # sum_before = self.substrate.mem[0, inds.energy].sum() + self.substrate.mem[0, inds.infra].sum()
+
         activate_outputs(self.substrate)
+        # sum_after = self.substrate.mem[0, inds.energy].sum() + self.substrate.mem[0, inds.infra].sum()
+        # assert abs(sum_before - sum_after) < 1e-5, f"Sum before: {sum_before:.4f}, Sum after: {sum_after:.4f}"
+
         invest_liquidate(self.substrate)
+        # sum_after = self.substrate.mem[0, inds.energy].sum() + self.substrate.mem[0, inds.infra].sum()
+        # assert abs(sum_before - sum_after) < 1e-5, f"Sum before: {sum_before:.4f}, Sum after: {sum_after:.4f}"
+
         explore_physics(self.substrate, self.kernel, self.dir_order)
-        energy_physics(self.substrate, self.kernel, max_infra=10, max_energy=1.5)
+        # sum_after = self.substrate.mem[0, inds.energy].sum() + self.substrate.mem[0, inds.infra].sum()
+        # assert abs(sum_before - sum_after) < 1e-5, f"Sum before: {sum_before:.4f}, Sum after: {sum_after:.4f}"
+
+        energy_physics(self.substrate, self.kernel, max_infra=5, max_energy=4)
+        # sum_after = self.substrate.mem[0, inds.energy].sum() + self.substrate.mem[0, inds.infra].sum()
+        # assert abs(sum_before - sum_after) < 1e-5, f"Sum before: {sum_before:.4f}, Sum after: {sum_after:.4f}"
 
         self.substrate.mem[0, inds.genome] = torch.where(
-            (self.substrate.mem[0, inds.infra] + self.substrate.mem[0, inds.energy]) > 0.05,
+            (self.substrate.mem[0, inds.infra] + self.substrate.mem[0, inds.energy]) > 0.1,
             self.substrate.mem[0, inds.genome],
             -1
         )
 
+    def apply_radiation_mutation(self, n_spots, spot_live_radius=2, spot_dead_radius=3):
+        inds = self.substrate.ti_indices[None]
+        xs = torch.randint(0, self.substrate.w, (n_spots,))
+        ys = torch.randint(0, self.substrate.h, (n_spots,))
+        
+        out_mem = self.substrate.mem.clone()
+        for i in range(n_spots):
+            genome_key = int(self.substrate.mem[0, inds.genome, xs[i], ys[i]].item())
+            inds_genome = torch.tensor([inds.genome], device=self.torch_device)
+            vals = torch.tensor([0.0], device=self.torch_device)
+            x = xs[i].item()
+            y = ys[i].item()
+            vals[0] = -1
+            self.set_chunk(out_mem, x, y, spot_dead_radius, inds_genome, vals)
 
-    def produce_alternating_order(self, len):
-        order = []
-        ind = 0
-        i = 0
-        while i < len:
-            order.append(ind)
-            if ind > 0:
-                ind = -ind
+            rand_genome_key = torch.randint(0, len(self.genomes), (1,))
+            if genome_key < 0:
+                vals[0] = rand_genome_key
+                self.set_chunk(out_mem, x, y, 1, inds_genome, vals)
             else:
-                ind = (-ind + 1)
-            i += 1
-        return torch.tensor(order, device = self.torch_device)
-    
+                if random.random() < 0.5:
+                    new_genome = copy.deepcopy(self.genomes[genome_key])
+                    new_genome.mutate(self.neat_config.genome_config)
+                    new_genome_key = self.add_organism_get_key(new_genome)
+                    vals[0] = new_genome_key
+                    self.set_chunk(out_mem, x, y, spot_live_radius, inds_genome, vals)
+                else: 
+                    new_genome = neat.DefaultGenome(str(len(self.genomes)))
+                    self.genomes[genome_key].fitness = 0.0
+                    self.genomes[rand_genome_key].fitness = 0.0
+                    new_genome.configure_crossover(self.genomes[genome_key], self.genomes[rand_genome_key], self.neat_config)
+                    new_genome_key = self.add_organism_get_key(new_genome)
+                    vals[0] = new_genome_key
+                    self.set_chunk(out_mem, x, y, spot_live_radius, inds_genome, vals)
+        inds_2 = torch.tensor(self.substrate.windex[['infra', 'energy']], device=self.torch_device)
+        vals = torch.tensor([1.0, 1.0], device=self.torch_device)
+        self.set_chunk(out_mem, x, y, spot_live_radius, inds_2, vals)
+        self.substrate.mem = out_mem
 
     @ti.kernel
     def replace_genomes(self, mem: ti.types.ndarray(), out_mem: ti.types.ndarray(),
@@ -196,17 +258,17 @@ class SpaceEvolver():
             return
 
         inds = self.substrate.ti_indices[None]
-        genome_cell_counts = [(i, self.substrate.mem[0, inds.genome].eq(i).sum().item()) for i in range(len(self.genomes))]
-        # Sort genomes by cell count (ascending) to identify those with the lowest count
-        sorted_genomes_by_cell_count = sorted(genome_cell_counts, key=lambda x: x[1], reverse=True)
+        # Combine genome indices with their cell counts and ages
+        genome_info = [(i, self.substrate.mem[0, inds.genome].eq(i).sum().item(), self.ages[i]) for i in range(len(self.genomes))]
+        # Sort genomes first by cell count (descending) then by age (ascending) to prioritize younger genomes
+        sorted_genomes_by_info = sorted(genome_info, key=lambda x: (-x[1], -x[2]))
         new_genomes = []
         new_ages = []
         new_combined_weights = []
         new_combined_biases = []
         genome_transitions = [None] * len(self.genomes)
-        for i in range(len(sorted_genomes_by_cell_count)):
-            index_of_genome = sorted_genomes_by_cell_count[i][0]
-            if i > max_population:
+        for i, (index_of_genome, _, _) in enumerate(sorted_genomes_by_info):
+            if i >= max_population:
                 print(f"KILLING {index_of_genome}")
                 genome_transitions[index_of_genome] = -1
             else:
@@ -214,11 +276,11 @@ class SpaceEvolver():
                 new_ages.append(self.ages[index_of_genome])
                 new_combined_weights.append(self.combined_weights[index_of_genome])
                 new_combined_biases.append(self.combined_biases[index_of_genome])
-                genome_transitions[index_of_genome] = len(new_genomes)
-        genome_transitions = torch.tensor(genome_transitions, device = self.torch_device)
+                genome_transitions[index_of_genome] = len(new_genomes) - 1
+        genome_transitions = torch.tensor(genome_transitions, device=self.torch_device)
         out_mem = torch.zeros_like(self.substrate.mem[0, inds.genome])
         self.replace_genomes(self.substrate.mem, out_mem, genome_transitions, self.substrate.ti_indices)
-        self.substrate.mem[0, inds.genome] = out_mem 
+        self.substrate.mem[0, inds.genome] = out_mem
 
         self.genomes = new_genomes
         self.ages = new_ages
@@ -251,7 +313,7 @@ class SpaceEvolver():
         loaded_mem = torch.load(os.path.join(folderpath, "sub_mem"))
         self.substrate.mem = loaded_mem
 
-        
+
     def save_genomes(self, genomes, filename):
         with open(filename, 'wb') as f:
             pickle.dump(self.genomes, f)
@@ -262,7 +324,7 @@ class SpaceEvolver():
         return genomes
     
     def report_if_necessary(self, timestep):
-        if timestep % 500 == 0:
+        if timestep % 300 == 0:
             timestep_dir = os.path.join(self.checkpoint_dir, f"step_{timestep}")
             os.makedirs(timestep_dir, exist_ok=True)
             self.substrate.save_mem_to_pt(filepath = os.path.join(timestep_dir, "sub_mem"))
@@ -313,27 +375,6 @@ class SpaceEvolver():
     def remove_reporter(self, reporter):
         self.reporters.remove(reporter)    
 
-    def init_population(self):
-        genomes = []
-        for i in range(self.neat_config.pop_size):
-            genome = neat.DefaultGenome(str(i))
-            genome.configure_new(self.neat_config.genome_config)
-            self.add_organism_get_key(genome)
-
-        return genomes
-
-
-    def init_substrate(self, genomes):
-        inds = self.substrate.ti_indices[None]
-        self.substrate.mem[0, inds.genome] = torch.where(
-            torch.rand_like(self.substrate.mem[0, inds.genome]) > 0.95,
-            torch.randint_like(self.substrate.mem[0, inds.genome], 0, len(genomes)),
-            -1
-        )
-        self.substrate.mem[0, inds.energy, ...] = 1.0
-        self.substrate.mem[0, inds.infra, ...] = 1.0
-        self.substrate.mem[0, inds.rot] = torch.randint_like(self.substrate.mem[0, inds.rot], 0, self.dir_kernel.shape[0])
-
 
     def add_organism_get_key(self, genome):
         # TODO: implement culling and memory consolidation
@@ -343,49 +384,15 @@ class SpaceEvolver():
         self.combined_biases.append(net.biases)
         self.ages.append(0)
         return len(self.combined_biases) - 1
-    
-
-    def set_chunk(self, genome_key, x, y, radius):
-        inds = self.substrate.ti_indices[None]
-        self.substrate.mem[0, inds.genome, x%self.substrate.w, y%self.substrate.h] = genome_key
-        for i in range(x-radius, x+radius):
-            for j in range(y-radius, y+radius):
-                self.substrate.mem[0, inds.genome, i%self.substrate.w, j%self.substrate.h] = genome_key        
 
 
-    def get_energy_offset(self, timestep, repeat_steps=50, amplitude=1, positive_scale=1, negative_scale=1):
+    def get_energy_offset(self, timestep, repeat_steps=100, amplitude=1, positive_scale=1, negative_scale=1):
         frequency = (2 * np.pi) / repeat_steps
         value = amplitude * np.sin(frequency * timestep)
         if value > 0:
             return value * positive_scale
         else:
             return value * negative_scale
-
-    
-    def apply_radiation_mutation(self, n_spots, spot_live_radius=2, spot_dead_radius=4):
-        inds = self.substrate.ti_indices[None]
-        xs = torch.randint(0, self.substrate.w, (n_spots,))
-        ys = torch.randint(0, self.substrate.h, (n_spots,))
-        
-        for i in range(n_spots):
-            genome_key = int(self.substrate.mem[0, inds.genome, xs[i], ys[i]].item())
-            rand_genome_key = torch.randint(0, len(self.genomes), (1,))
-            self.set_chunk(-1, xs[i], ys[i], spot_dead_radius)
-            if genome_key < 0:
-                self.set_chunk(rand_genome_key, xs[i], ys[i], spot_live_radius)
-            else:
-                if random.random() < 0.5:
-                    new_genome = copy.deepcopy(self.genomes[genome_key])
-                    new_genome.mutate(self.neat_config.genome_config)
-                    new_genome_key = self.add_organism_get_key(new_genome)
-                    self.set_chunk(new_genome_key, xs[i], ys[i], spot_live_radius)
-                else: 
-                    new_genome = neat.DefaultGenome(str(len(self.genomes)))
-                    self.genomes[genome_key].fitness = 0.0
-                    self.genomes[rand_genome_key].fitness = 0.0
-                    new_genome.configure_crossover(self.genomes[genome_key], self.genomes[rand_genome_key], self.neat_config)
-                    new_genome_key = self.add_organism_get_key(new_genome)
-                    self.set_chunk(new_genome_key, xs[i], ys[i], spot_live_radius)
 
 
     def create_torch_net(self, genome):

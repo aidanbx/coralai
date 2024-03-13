@@ -10,13 +10,14 @@ def activate_outputs(substrate):
     substrate.mem[:, inds.com] = torch.sigmoid(ch_norm(substrate.mem[:, inds.com]))
     substrate.mem[:, [inds.acts_invest, inds.acts_liquidate]] = torch.softmax(substrate.mem[0, [inds.acts_invest, inds.acts_liquidate]], dim=0)
 
-    substrate.mem[:, inds.acts_explore] = nn.ReLU()(substrate.mem[:, inds.acts_explore])
-    mean_activation = torch.mean(substrate.mem[0, inds.acts_explore], dim=0)
-    substrate.mem[0, inds.acts_explore[0]] = mean_activation
-    substrate.mem[0, inds.acts_explore] = torch.softmax(substrate.mem[0, inds.acts_explore], dim=0)
+    substrate.mem[:, inds.acts_explore] = nn.ReLU()(ch_norm(substrate.mem[:, inds.acts_explore]))
+    # substrate.mem[0, inds.acts_explore[0]] = mean_activation
+    # substrate.mem[0, inds.acts_explore] = torch.softmax(substrate.mem[0, inds.acts_explore], dim=0)
+    substrate.mem[0, inds.acts_explore] /= torch.mean(substrate.mem[0, inds.acts_explore], dim=0)
 
-    substrate.mem[0, inds.acts] = torch.where(substrate.mem[0, inds.genome] < 0, 0, substrate.mem[0, inds.acts])
-
+    substrate.mem[0, inds.acts] = torch.where((substrate.mem[0, inds.genome] < 0) |
+                                              (substrate.mem[0, inds.infra] < 0.1),
+                                              0, substrate.mem[0, inds.acts])
 
 @ti.kernel
 def apply_weights_and_biases(mem: ti.types.ndarray(), out_mem: ti.types.ndarray(),
@@ -49,9 +50,10 @@ def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
             winning_genomes: ti.types.ndarray(), winning_rots: ti.types.ndarray(),
             dir_kernel: ti.types.ndarray(), dir_order: ti.types.ndarray(), ti_inds: ti.template()):
     inds = ti_inds[None]
+    first_explore_act = int(inds.acts_explore[0])
     for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
         winning_genome = mem[0, inds.genome, i, j]
-        max_bid = mem[0, inds.infra, i, j]
+        max_bid = mem[0, inds.infra, i, j] * 0.5
         winning_rot = mem[0, inds.rot, i, j]
 
         for offset_n in ti.ndrange(dir_kernel.shape[0]): # this order doesn't matter
@@ -70,10 +72,11 @@ def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
             bid = 0.0
             # If neigh's explore dir points towards this center
             if ((neigh_dir_x + dir_kernel[offset_n, 0]) == 0 and (neigh_dir_y + dir_kernel[offset_n, 1]) == 0):
-                bid = mem[0, inds.infra, neigh_x, neigh_y]
-                infra_delta[neigh_x, neigh_y] -= bid # bids are always taken as investment
-                bid = 0.9 # cost of dooing business
-                energy_delta[i, j] += bid
+                neigh_act = mem[0, first_explore_act + neigh_max_act_i, neigh_x, neigh_y]
+                neigh_infra = mem[0, inds.infra, neigh_x, neigh_y]
+                bid = neigh_infra * neigh_act * 0.2
+                energy_delta[neigh_x, neigh_y] -= bid# * neigh_act # bids are always taken as investment
+                infra_delta[i, j] += bid * 0.8
                 if bid > max_bid:
                     max_bid = bid
                     winning_genome = mem[0, inds.genome, neigh_x, neigh_y]
@@ -99,7 +102,6 @@ def explore_physics(substrate, dir_kernel, dir_order):
     substrate.mem[0, inds.energy] += energy_delta
     substrate.mem[0, inds.genome] = winning_genome
     substrate.mem[0, inds.rot] = winning_rots
-
 
 @ti.kernel
 def flow_energy_down(mem: ti.types.ndarray(), out_energy_mem: ti.types.ndarray(),
@@ -133,13 +135,13 @@ def flow_energy_down(mem: ti.types.ndarray(), out_energy_mem: ti.types.ndarray()
 def distribute_energy(mem: ti.types.ndarray(), out_energy: ti.types.ndarray(), max_energy: ti.f32, kernel: ti.types.ndarray(), ti_inds: ti.template()):
     inds = ti_inds[None]
     for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
-        if mem[0, inds.energy, i, j] > max_energy:
-            for off_n in ti.ndrange(kernel.shape[0]):
-                neigh_x = (i + kernel[off_n, 0]) % mem.shape[2]
-                neigh_y = (j + kernel[off_n, 1]) % mem.shape[3]
-                out_energy[neigh_x, neigh_y] += (mem[0, inds.energy, i, j] / kernel.shape[0])
-        else:
-            out_energy[i, j] += mem[0, inds.energy, i, j]
+        # if mem[0, inds.energy, i, j] > max_energy:
+        for off_n in ti.ndrange(kernel.shape[0]):
+            neigh_x = (i + kernel[off_n, 0]) % mem.shape[2]
+            neigh_y = (j + kernel[off_n, 1]) % mem.shape[3]
+            out_energy[neigh_x, neigh_y] += (mem[0, inds.energy, i, j] / kernel.shape[0])
+        # else:
+        #     out_energy[i, j] += mem[0, inds.energy, i, j]
 
 @ti.kernel
 def flow_energy_up(mem: ti.types.ndarray(), out_energy_mem: ti.types.ndarray(),
@@ -147,7 +149,7 @@ def flow_energy_up(mem: ti.types.ndarray(), out_energy_mem: ti.types.ndarray(),
     inds = ti_inds[None]
     for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
         central_energy = mem[0, inds.energy, i, j]
-        infra_sum = 0.0
+        infra_sum = 0.00001
         for off_n in ti.ndrange(kernel.shape[0]):
             neigh_x = (i + kernel[off_n, 0]) % mem.shape[2]
             neigh_y = (j + kernel[off_n, 1]) % mem.shape[3]
@@ -160,7 +162,8 @@ def flow_energy_up(mem: ti.types.ndarray(), out_energy_mem: ti.types.ndarray(),
                 central_energy * ((neigh_infra/infra_sum)))
             
 @ti.kernel
-def distribute_infra(mem: ti.types.ndarray(), out_infra: ti.types.ndarray(), max_infra: ti.f32, kernel: ti.types.ndarray(), ti_inds: ti.template()):
+def distribute_infra(mem: ti.types.ndarray(), out_infra: ti.types.ndarray(), out_energy: ti.types.ndarray(), 
+                     max_infra: ti.f32, kernel: ti.types.ndarray(), ti_inds: ti.template()):
     inds = ti_inds[None]
     for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
         if mem[0, inds.infra, i, j] > max_infra:
@@ -168,6 +171,9 @@ def distribute_infra(mem: ti.types.ndarray(), out_infra: ti.types.ndarray(), max
                 neigh_x = (i + kernel[off_n, 0]) % mem.shape[2]
                 neigh_y = (j + kernel[off_n, 1]) % mem.shape[3]
                 out_infra[neigh_x, neigh_y] += (mem[0, inds.infra, i, j] / kernel.shape[0])
+            # above_max = out_infra[neigh_x, neigh_y] - max_infra
+            # out_infra[neigh_x, neigh_y] -= above_max
+            # out_energy[neigh_x, neigh_y] += above_max
         else:
             out_infra[i, j] += mem[0, inds.infra, i, j]
     
@@ -179,15 +185,18 @@ def energy_physics(substrate, kernel, max_infra, max_energy):
 
     energy_out_mem = torch.zeros_like(substrate.mem[0, inds.energy])
     flow_energy_up(substrate.mem, energy_out_mem, kernel, substrate.ti_indices)
+    print(f"Energy Out Mem Sum Difference: {energy_out_mem.sum().item() - substrate.mem[0, inds.energy].sum().item():.4f}")
     substrate.mem[0, inds.energy] = energy_out_mem
-
+    
     energy_out_mem = torch.zeros_like(substrate.mem[0, inds.energy])
     distribute_energy(substrate.mem, energy_out_mem, max_energy, kernel, substrate.ti_indices)
     substrate.mem[0, inds.energy] = energy_out_mem
 
     infra_out_mem = torch.zeros_like(substrate.mem[0, inds.infra])
-    distribute_infra(substrate.mem, infra_out_mem, max_infra, kernel, substrate.ti_indices)
+    energy_out_mem = torch.zeros_like(substrate.mem[0, inds.energy])
+    distribute_infra(substrate.mem, infra_out_mem, energy_out_mem, max_infra, kernel, substrate.ti_indices)
     substrate.mem[0, inds.infra] = infra_out_mem
+    substrate.mem[0, inds.energy] = energy_out_mem
 
 
 def invest_liquidate(substrate):
@@ -196,3 +205,5 @@ def invest_liquidate(substrate):
     liquidations = substrate.mem[0, inds.acts_liquidate] * substrate.mem[0, inds.infra]
     substrate.mem[0, inds.energy] += liquidations - investments
     substrate.mem[0, inds.infra] += investments - liquidations
+
+
