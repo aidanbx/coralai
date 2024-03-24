@@ -75,7 +75,7 @@ class SpaceEvolver():
             config_str = f.read()
         with open(os.path.join(self.checkpoint_dir, "neat_config"), "w") as f:
             f.write(config_str)
-        self.substrate.save_metadata_to_json(filepath = os.path.join(self.checkpoint_dir, "sub_meta"))
+        self.substrate.save_metadata_to_json(filepath = os.path.join(self.checkpoint_dir, "sub_metadata.json"))
 
     def init_population(self):
         genomes = []
