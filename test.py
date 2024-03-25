@@ -5,6 +5,52 @@ import matplotlib.pyplot as plt
 
 ti.init(ti.metal)
 
+window = ti.ui.Window(
+            f"asd", (100, 100), fps_limit=200, vsync=True
+        )
+
+canvas = window.get_canvas()
+gui = window.get_gui()
+
+exit()
+@ti.dataclass
+class VisData:
+    chinds: ti.f32
+    scale: ti.i32
+
+@ti.dataclass
+class DrawableData:
+    brush_radius: ti.i32
+    channel_to_paint: ti.i32
+    val_to_paint: ti.f32
+
+@ti.dataclass
+class DrawableVisData:
+    visData: VisData
+    drawData: DrawableData
+
+    def __init__(self):
+        self.visData = VisData(chinds=3, scale=1)
+        self.drawData = DrawableData(brush_radius=1, channel_to_paint=0, val_to_paint=1)
+
+@ti.kernel
+def test_v(visdata: VisData) -> VisData:
+    visdata.chinds = 1
+    return visdata
+
+v = VisData(chinds=3, scale=1)
+print(test_v(v))
+
+@ti.kernel
+def tst_dv(visdata: DrawableVisData) -> DrawableVisData:
+    visdata.visData.chinds = 1
+    return visdata
+
+dv = DrawableVisData()
+print(tst_dv(dv))
+
+exit()
+
 t = torch.rand(1,1,4,4) - 0.5
 print(t)
 def ch_norm(input_tensor):
