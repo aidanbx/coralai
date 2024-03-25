@@ -7,6 +7,8 @@ from .substrate import Substrate
 
 @ti.dataclass
 class VisualizationTiData:
+    """Vis data to be sent to Taichi Kernels
+    """
     mem_w: ti.i32
     mem_h: ti.i32
     img_w: ti.i32
@@ -16,6 +18,7 @@ class VisualizationTiData:
 
 @dataclass
 class VisualizationData:
+    """"""
     ti_data: VisualizationTiData
     substrate: Substrate
     chinds: torch.Tensor

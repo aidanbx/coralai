@@ -1,10 +1,91 @@
+from dataclasses import dataclass
 import os
 import json
+from typing import List
 import torch
 import taichi as ti
 
 from analysis_vis import compose_analysis_vis, AnalysisVisData
 from coralai.substrate.substrate import Substrate
+
+
+def construct_channel_dtype(channel_data):
+    if "subchannels" in channel_data:
+        subchannel_types = {}
+        for subchannel, subchannel_data in channel_data["subchannels"].items():
+            subchannel_type = construct_channel_dtype(subchannel_data)
+            subchannel_types[subchannel] = subchannel_type
+        channel_type = ti.types.struct(**subchannel_types)
+    elif len(channel_data["indices"]) == 1:
+        channel_type = ti.f32
+    elif len(channel_data["indices"]) > 1:
+        channel_type = ti.types.vector(len(channel_data["indices"]), ti.f32)
+    return channel_type
+
+def load_substrate_metadata(experiment_dir):
+    sub_metadata_path = os.path.join(experiment_dir, "sub_meta")
+    with open(sub_metadata_path, "r") as f:
+        sub_meta = json.load(f)
+    shape = sub_meta["shape"][2:]
+    channels = {}
+    for channel_name, channel_data in sub_meta["windex"].items():
+        channel_type = construct_channel_dtype(channel_data)
+        channels[channel_name] = channel_type
+    return shape, channels
+
+def fetch_substrate_step_mem(step_dir):
+    sub_mem_path = os.path.join(step_dir, "sub_mem")
+    sub_mem = torch.load(sub_mem_path)
+    return sub_mem
+
+@dataclass
+class RunData:
+    run_path: str
+    run_name: str
+    substrate: Substrate
+    steps: List[str]
+    curr_step_index: int
+    curr_step_number: int
+    step_path: str
+    torch_device: torch.DeviceObjType
+
+    def __init__(self, run_path, torch_device):
+        shape, channels = load_substrate_metadata(run_path)
+        self.substrate = Substrate(shape, torch.float32, torch_device, channels)
+        self.substrate.malloc()
+        self.steps = sorted([step for step in os.listdir(run_path) if step.startswith("step_")], key=lambda x: int(x.split("_")[1]))
+        
+        self.run_path=run_path
+        self.run_name=os.path.basename(run_path)
+        self.curr_step_index=0
+        self.curr_step_number=None
+        self.step_path=None
+        self.torch_device=torch_device
+
+        self.load_step()
+
+    def load_step(self):
+        self.curr_step_index = self.curr_step_index % len(self.steps)
+        self.step_path = os.path.join(self.run_path, self.steps[self.curr_step_index])
+        self.step_number = int(self.steps[self.curr_step_index].split("_")[1])
+        self.substrate.mem = fetch_substrate_step_mem(self.step_path)
+
+    def next_step(self):
+        self.curr_step_index += 1
+        self.load_step()
+
+    def prev_step(self):
+        self.curr_step_index -= 1
+        self.load_step()
+
+
+@dataclass
+class History:
+    path: str
+    run_names: List[str]
+    curr_run_index: int
+    curr_run_data: RunData
+
 
 
 # def display_steps(run_dir, substrate):
@@ -32,95 +113,6 @@ from coralai.substrate.substrate import Substrate
 
 #         vis.update(current_step_index, steps)
 
-# class Run:
-#     def __init__(self, data_path, torch_device):
-#         self.data_path = data_path
-#         self.torch_device = torch_device
-#         self.substrate = Run.gen_substrate(self.data_path, self.torch_device)
-    
-
-def construct_channel_dtype(channel_data):
-    # If the channel has subchannels, construct a struct
-    if "subchannels" in channel_data:
-        subchannel_types = {subchannel: construct_channel_dtype(subchannel_data)
-                            for subchannel, subchannel_data in channel_data["subchannels"].items()}
-        return ti.types.struct(**subchannel_types)
-    else:
-        # Assuming all channels without subchannels are of type float32
-        return ti.f32
-    
-
-def gen_substrate(experiment_dir, torch_device):
-    sub_metadata_path = os.path.join(experiment_dir, "sub_meta")
-    sub_meta = None
-    with open(sub_metadata_path, "r") as f:
-        sub_meta = json.load(f)
-
-    # Extract shape from metadata
-    shape = sub_meta["shape"][2:]  # Assuming the relevant dimensions are the last two
-
-    # Construct channels dictionary with proper handling of subchannels
-    channels = {}
-    for channel_name, channel_data in sub_meta["windex"].items():
-        channels[channel_name] = construct_channel_dtype(channel_data)
-
-    # Initialize the substrate with the extracted shape and channels
-    substrate = Substrate(shape, torch.float32, torch_device, channels)
-    substrate.malloc()  # Allocate memory for the substrate
-
-    return substrate
-
-def load_sub_mem(step_dir):
-    sub_mem_path = os.path.join(step_dir, "sub_mem")
-    sub_mem = torch.load(sub_mem_path)
-    return sub_mem
-    
-
-    
-# class History:
-#     def __init__(self, history_path, torch_device):
-#         self.history_path = history_path
-#         self.torch_device = torch_device
-#         self.runs = os.listdir(self.history_path)
-#         self.current_run_num = 0
-#         self.current_run_name = self.runs[self.current_run_num]
-#         self.init_curr_run()
-
-
-#     def goto(self, run_name=None, run_num=None):
-#         if not run_name and not run_num:
-#             raise ValueError("Must provide either run_name or run_num")
-#         if run_name and run_num:
-#             raise ValueError("Must provide either run_name or run_num, not both")
-#         if run_name:
-#             self.current_run_num = self.runs.index(run_name)
-#             self.current_run_name = run_name
-#         if run_num:
-#             self.current_run_num = run_num
-#             self.current_run_name = self.runs[run_num]
-#         self.init_curr_run()
-
-
-#     def next_run(self):
-#         self.current_run_num = (self.current_run_num + 1) % len(self.runs)
-#         self.current_run_name = self.runs[self.current_run_num]
-#         self.init_curr_run()
-    
-
-#     def prev_run(self):
-#         self.current_run_num = (self.current_run_num - 1) % len(self.runs)
-#         self.current_run_name = self.runs[self.current_run_num]
-#         self.init_curr_run()
-
-
-#     def init_curr_run(self):
-#         self.current_run = Run(os.path.join(self.history_path, self.current_run_name), self.torch_device)
-
-
-# def create_vis(run_dirs, run_num, torch_device):
-#     substrate = gen_substrate(run_path, torch_device)
-#     display_steps(run_path, substrate)
-
 
 if __name__ == "__main__":
     ti.init(ti.metal)
@@ -131,14 +123,20 @@ if __name__ == "__main__":
 
     run_name = "space_evolver_run_240310-0013_40"
     run_path = os.path.join(hist_dir, run_name)
-    substrate = gen_substrate(run_path, torch_device)
-    substrate.mem = load_sub_mem(os.path.join(run_path, "step_0"))
-
-    avis_data = AnalysisVisData(substrate)
+    run_data = RunData(run_path, torch_device)
+    avis_data = AnalysisVisData(run_data.substrate)
     avis_data.set_run_dir(run_path)
     update_analysis_vis = compose_analysis_vis(avis_data)
 
     while avis_data.window.running and not avis_data.escaped:
+        if avis_data.next_step_clicked:
+            run_data.next_step()
+            avis_data.next_step_clicked = False
+        if avis_data.prev_step_clicked:
+            run_data.prev_step()
+            avis_data.prev_step_clicked = False
+        avis_data.run_name = run_data.run_name
+        avis_data.step_number = run_data.step_number
         update_analysis_vis()
 
     # create_vis(run_dir, torch_device)
