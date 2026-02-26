@@ -289,7 +289,6 @@ def setup_nca(shape):
     channel_names = ["rgb", "hidden", "genome"]
 
     def step_fn():
-        nonlocal weights, biases
         substrate.mem[:, neat_evolver.act_chinds] += (
             torch.rand_like(substrate.mem[:, neat_evolver.act_chinds]) * 0.1)
         neat_evolver.forward(weights, biases)
@@ -297,7 +296,7 @@ def setup_nca(shape):
             substrate.mem[:, neat_evolver.act_chinds])
 
     def mutate_fn(strength=None):
-        nonlocal weights, biases, genome
+        nonlocal weights, biases
         genome.mutate(neat_evolver.neat_config.genome_config)
         net = neat_evolver.create_torch_net(genome)
         weights = net.weights.unsqueeze(0)
