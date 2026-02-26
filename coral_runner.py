@@ -1,7 +1,7 @@
 import os
 import torch
 import taichi as ti
-from coralai.instances.coral.coral_physics import apply_physics
+from coralai.instances.coral.coral_physics_old import apply_physics
 from coralai.substrate.substrate import Substrate
 from coralai.evolution.ecosystem import Ecosystem
 from coralai.evolution.hyper_organism import HyperOrganism

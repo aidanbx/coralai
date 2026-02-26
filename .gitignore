@@ -24,3 +24,8 @@ taichi_examples/
 ./examples/taichi_examples/
 *.mov
 history/
+neat_output/
+runs/
+history/
+.venv/
+__pycache__/
