@@ -1,0 +1,25 @@
+name: coralai
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.10,<3.13
+  - pip
+  - numpy
+  - scipy
+  - matplotlib
+  - pillow
+  - pip:
+    - torch
+    - taichi>=1.6.0
+    - neat-python==0.92
+    - click
+    - dask
+    - noise
+    - imageio
+    - imageio-ffmpeg
+    - pytest
+    - flake8
+    - -e coralai/dependencies/PyTorch-NEAT
+    - -e .

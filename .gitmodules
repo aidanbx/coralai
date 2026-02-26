@@ -1,3 +1,0 @@
-[submodule "coralai/dependencies/PyTorch-NEAT"]
-	path = coralai/dependencies/PyTorch-NEAT
-	url = https://github.com/aidanbx/PyTorch-NEAT
