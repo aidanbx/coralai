@@ -2,7 +2,7 @@
 
 This repo contains the code for:
 - **Coralai** (Master's Thesis 2024)
-- **EINCASM** (ALIFE 2023) — see historical notes below
+- **EINCASM** (ALIFE 2023) - see historical notes below
 
 Coralai is a framework for simulating and studying emergent ecosystems in neural cellular collectives resembling slime molds. Each cell in a 2D toroidal grid runs the same NEAT-evolved neural network, competing for energy and space. Selection pressure is purely spatial — cells that can't accumulate enough energy die, and successful strategies spread through directional colonization and mutation.
 

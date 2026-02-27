@@ -10,21 +10,21 @@ All analysis, design thinking, and substantial AI responses belong in the **logs
 
 ```
 logs/
-├── YY-MM-DD ddd—Session Title.md           ← human session log (one per day, append-only)
+├── YY-MM-DD ddd - Session Title.md         ← human session log (one per day, append-only)
 └── YYYY-MM-DD ddd/                         ← AI output directory for that day
     └── YYYY-MM-DD ddd HH.MM descriptive title.md
 ```
 
-### Human session log (`YY-MM-DD ddd—Title.md`)
-- One file per day, named with short year + 3-letter weekday: `26-02-26 Thu—Title.md`
-- Title represents the full day's content — update it as the day progresses
+### Human session log (`YY-MM-DD ddd - Title.md`)
+- One file per day, named with short year + 3-letter weekday: `26-02-26 Thu - Title.md`
+- Title represents the full day's content; update it as the day progresses
 - Sections separated by `---`, ordered chronologically
 - Captures questions, decisions, and directions to explore
 
 ### AI output files (`YYYY-MM-DD ddd/YYYY-MM-DD ddd HH.MM descriptive title.md`)
 - Written to the dated subdirectory: `YYYY-MM-DD ddd/`
 - Filename: full ISO 8601 date + ddd + `HH.MM` time + space-separated descriptive title
-- Note: use `HH.MM` (period separator) not `HH:MM` — colons are invalid in filenames on macOS/Windows
+- Note: use `HH.MM` (period separator) not `HH:MM`; colons are invalid in filenames on macOS/Windows
 - Example: `2026-02-26 Thu/2026-02-26 Thu 14.30 energy dynamics and architecture.md`
 - Write a new file for any substantial analysis, design exploration, or technical write-up
 
@@ -36,8 +36,8 @@ CoralAI is a Python research framework for simulating emergent ecosystems of evo
 
 See `logs/2026-02-26 Thu/2026-02-26 Thu 20.21 coralai deep dive.md` for a full architectural write-up.
 
-**Active runner**: `coral_runner_space.py` — continuous spatial NEAT, no explicit generations.
-**Active instance**: `coralai/instances/coral/` — energy/infra economy with directional colonization.
+**Active runner**: `coral_runner_space.py` - continuous spatial NEAT, no explicit generations.
+**Active instance**: `coralai/instances/coral/` - energy/infra economy with directional colonization.
 **Active physics**: `coralai/instances/coral/coral_physics.py`.
 **Active evolver**: `coralai/evolution/space_evolver.py`.
 
@@ -168,7 +168,7 @@ Grid size scales as O(W×H×C) where C is total channel count. For coral: C=15 c
 - The genome culling strategy (`reduce_population_to_threshold`) kills lowest-cell-count genomes when count >100 — bad for biodiversity, a memory management workaround
 
 ### Known design issues
-- `activate_outputs` applies `softmax(dim=0)` on invest/liquidate, forcing `invest + liquidate = 1` per cell — cells can never "do nothing," wastes energy at equilibrium. See `../logs/2026-02-26 Thu/2026-02-26 Thu invest liquidate softmax analysis.md`.
+- `activate_outputs` applies `softmax(dim=0)` on invest/liquidate, forcing `invest + liquidate = 1` per cell; cells can never "do nothing," wastes energy at equilibrium. See `../logs/2026-02-26 Thu/2026-02-26 Thu invest liquidate softmax analysis.md`.
 - `explore_physics` uses `argmax` on direction activations — discards magnitude, forces single-direction expansion per step
 - No spatially-structured energy sources — energy injection is spatially homogeneous (uniform noise + sinusoidal offset)
 - `LinearNet` in SpaceEvolver ignores NEAT hidden nodes — the network is always purely linear regardless of `num_hidden` in the config
