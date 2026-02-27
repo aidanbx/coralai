@@ -19,6 +19,38 @@ The goal of coralai is to produce robust and adaptable organisms that can surviv
 
 More work is to be done on experimentation, analysis, parameter searches, and the evolution of physics/rules.
 
+# Setup
+
+Run setup from the **`coralai`** directory (the one that contains `setup.sh` and `Makefile`).
+
+**Conda (recommended):**
+```bash
+cd coralai
+./setup.sh conda
+conda activate coralai
+```
+
+**Venv:** use `./setup.sh venv`, then `source .venv/bin/activate` (Linux/macOS) or `.venv\Scripts\activate` (Windows).
+
+**Nuances:**
+- **Where to run:** Run all Python commands from the **`coralai`** directory so that `coralai` package imports resolve (e.g. `python coral_runner.py`, not from the repo root unless you add it to `PYTHONPATH`).
+- **GUI vs headless:** The **GUI runners** (`minimal_runner.py`, `nca_runner.py`, `coral_runner.py`) use Taichi GGUI and are set up for **Mac Metal**; use them for a visual window. The **headless REPL** (`headless_repl.py`) works everywhere and is what `make run-minimal` / `make run-nca` / `make run-coral` use; it writes video and logs to `runs/` and has no window.
+- **Conda not installed:** Use `./setup.sh venv` to create a virtualenv instead.
+
+**Run with GUI (Mac):**
+```bash
+conda activate coralai
+python coral_runner_space.py   # full coral ecosystem
+python minimal_runner.py      # minimal B&W NCA
+python nca_runner.py         # NCA with RGB channels
+```
+
+**Run headless (any platform):**
+```bash
+make run-minimal   # or run-nca, run-coral
+# or: python headless_repl.py --experiment minimal --shape 64
+```
+
 # Code Organization
 ### ./
 - Here is where you create a new experiment and run it. 
