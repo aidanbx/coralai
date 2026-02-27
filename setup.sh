@@ -72,8 +72,8 @@ elif [ "$MODE" = "venv" ]; then
 
     info "Installing dependencies..."
     pip install --upgrade pip setuptools wheel -q
-    pip install -r requirements.txt -q
-    pip install -e . --no-deps -q
+    pip install -e "coralai/dependencies/PyTorch-NEAT" -q
+    pip install -e ".[dev]" -q
 
     info ""
     info "Setup complete! Activate with:"

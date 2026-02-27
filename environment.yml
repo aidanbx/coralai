@@ -11,15 +11,5 @@ dependencies:
   - matplotlib
   - pillow
   - pip:
-    - torch
-    - taichi>=1.6.0
-    - neat-python==0.92
-    - click
-    - dask
-    - noise
-    - imageio
-    - imageio-ffmpeg
-    - pytest
-    - flake8
     - -e coralai/dependencies/PyTorch-NEAT
-    - -e .
+    - -e ".[dev]"
