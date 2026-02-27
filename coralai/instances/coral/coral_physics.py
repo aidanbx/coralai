@@ -9,16 +9,27 @@ def activate_outputs(substrate):
     inds = substrate.ti_indices[None]
     mem = substrate.mem
 
-    mem[:, inds.com] = torch.sigmoid(ch_norm(mem[:, inds.com]))
-    mem[:, [inds.acts_invest, inds.acts_liquidate]] = torch.softmax(
-        mem[0, [inds.acts_invest, inds.acts_liquidate]], dim=0)
+    com_indices = list(inds.com)
+    com_start, com_end = com_indices[0], com_indices[-1] + 1
+    com_slice = mem[:, com_start:com_end]
+    com_mean = com_slice.mean(dim=(0, 2, 3), keepdim=True)
+    com_var = com_slice.var(dim=(0, 2, 3), keepdim=True, unbiased=False)
+    mem[:, com_start:com_end] = torch.sigmoid(
+        (com_slice - com_mean) / torch.sqrt(com_var + 1e-5))
 
-    explore_vals = torch.relu(mem[0, inds.acts_explore])
+    inv_liq = mem[0, inds.acts_invest:inds.acts_liquidate + 1]
+    mem[0, inds.acts_invest:inds.acts_liquidate + 1] = torch.softmax(inv_liq, dim=0)
+
+    explore_indices = list(inds.acts_explore)
+    exp_start, exp_end = explore_indices[0], explore_indices[-1] + 1
+    explore_vals = torch.relu(mem[0, exp_start:exp_end])
     explore_vals[0] = explore_vals.mean(dim=0)
-    mem[0, inds.acts_explore] = torch.softmax(explore_vals, dim=0)
+    mem[0, exp_start:exp_end] = torch.softmax(explore_vals, dim=0)
 
-    dead_mask = (mem[0, inds.genome] < 0).unsqueeze(0).expand_as(mem[0, inds.acts])
-    mem[0, inds.acts] = torch.where(dead_mask, torch.zeros(1, device=mem.device), mem[0, inds.acts])
+    act_indices = list(inds.acts)
+    act_start, act_end = act_indices[0], act_indices[-1] + 1
+    dead = mem[0, inds.genome:inds.genome + 1] < 0
+    mem[0, act_start:act_end] *= (~dead).float()
 
 
 @ti.kernel
@@ -220,7 +231,10 @@ def energy_physics(substrate, kernel, max_infra, max_energy):
 
 def invest_liquidate(substrate):
     inds = substrate.ti_indices[None]
-    investments = substrate.mem[0, inds.acts_invest] * substrate.mem[0, inds.energy]
-    liquidations = substrate.mem[0, inds.acts_liquidate] * substrate.mem[0, inds.infra]
-    substrate.mem[0, inds.energy] += liquidations - investments
-    substrate.mem[0, inds.infra] += investments - liquidations
+    energy = substrate.mem[0, inds.energy]
+    infra = substrate.mem[0, inds.infra]
+    invest = substrate.mem[0, inds.acts_invest]
+    liquidate = substrate.mem[0, inds.acts_liquidate]
+    delta = invest * energy - liquidate * infra
+    substrate.mem[0, inds.energy] -= delta
+    substrate.mem[0, inds.infra] += delta

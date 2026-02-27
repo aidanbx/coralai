@@ -105,10 +105,15 @@ class SpaceEvolver():
         self.forward(combined_weights, combined_biases)
         self.energy_offset = self.get_energy_offset(self.timestep)
         self.ages = [age + 1 for age in self.ages]
-        self.substrate.mem[0, inds.energy] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + self.energy_offset) * 0.1
-        self.substrate.mem[0, inds.infra] += (torch.randn_like(self.substrate.mem[0, inds.energy]) + self.energy_offset) * 0.1
-        self.substrate.mem[0, inds.energy] = torch.clamp(self.substrate.mem[0, inds.energy], 0.01, 100)
-        self.substrate.mem[0, inds.infra] = torch.clamp(self.substrate.mem[0, inds.infra], 0.01, 100)
+        offset = self.energy_offset
+        energy_ch = inds.energy
+        infra_ch = inds.infra
+        self.substrate.mem[0, energy_ch].add_(
+            torch.randn_like(self.substrate.mem[0, energy_ch]).add_(offset).mul_(0.1))
+        self.substrate.mem[0, infra_ch].add_(
+            torch.randn_like(self.substrate.mem[0, infra_ch]).add_(offset).mul_(0.1))
+        self.substrate.mem[0, energy_ch].clamp_(0.01, 100)
+        self.substrate.mem[0, infra_ch].clamp_(0.01, 100)
         if self.timestep % 50 == 0:
             self.kill_random_chunk(5)
     
@@ -130,17 +135,14 @@ class SpaceEvolver():
 
     def apply_physics(self):
         inds = self.substrate.ti_indices[None]
-        # self.substrate.mem[0, inds.energy, self.substrate.w//2, self.substrate.h//2] += 10
         activate_outputs(self.substrate)
         invest_liquidate(self.substrate)
         explore_physics(self.substrate, self.kernel, self.dir_order)
         energy_physics(self.substrate, self.kernel, max_infra=10, max_energy=1.5)
 
-        self.substrate.mem[0, inds.genome] = torch.where(
-            (self.substrate.mem[0, inds.infra] + self.substrate.mem[0, inds.energy]) > 0.05,
-            self.substrate.mem[0, inds.genome],
-            -1
-        )
+        alive = (self.substrate.mem[0, inds.infra]
+                 + self.substrate.mem[0, inds.energy]) > 0.05
+        self.substrate.mem[0, inds.genome].masked_fill_(~alive, -1)
 
 
     def produce_alternating_order(self, len):
