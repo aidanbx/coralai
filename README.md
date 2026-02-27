@@ -1,50 +1,109 @@
 # Coralai: Emergent Ecosystems of Evolved Neural Cellular Automata
 
-
 This repo contains the code for:
-- Coralai (Master's Thesis 2024)
-- EINCASM (ALIFE 2023)
+- **Coralai** (Master's Thesis 2024)
+- **EINCASM** (ALIFE 2023) — see historical notes below
 
+Coralai is a framework for simulating and studying emergent ecosystems in neural cellular collectives resembling slime molds. Each cell in a 2D toroidal grid runs the same NEAT-evolved neural network, competing for energy and space. Selection pressure is purely spatial — cells that can't accumulate enough energy die, and successful strategies spread through directional colonization and mutation.
 
-Coralai is a framework for simulating and studying emergent ecosystem in neural cellular collectives resembling slime molds. The code in this repository is under heavy development.
+**Key capabilities:**
+- Evolves and visualizes Neural Cellular Automata (NCA) in real-time with custom physics and NEAT-evolved architectures
+- GPU-accelerated on Mac Metal, CUDA, and CPU via [Taichi Lang](https://docs.taichi-lang.org/) + PyTorch
+- Continuous spatial NEAT — no explicit generations; mutation and crossover happen in-place like radiation events
+- Configurable channel layout, kernel shape, physics pipeline, and NEAT hyperparameters per experiment
+- Headless REPL for cross-platform use (Linux/CI), outputs video and JSON logs
 
-Coralai....
-- Can evolve and visualize, in real-time, Neural Cellular Automata (NCA) with custom physics and neural architectures.
-- Runs on GPU (+ Mac Metal) using [Taichi Lang](https://docs.taichi-lang.org/) and PyTorch NEAT.
-- Selects organisms that successfully mine, distribute, and utilize capital/energy from other organisms or resources.
-- Can generate customizable weather patterns to determine resource productivity and physical parameters
-- Contains physics for organisms to transport capital from cell to cell using muscle contractions, all at a cost of capital.   
+For a full architectural write-up see `logs/2026-02-26 Thu/2026-02-26 Thu 20.21 coralai deep dive.md`.
 
-The goal of coralai is to produce robust and adaptable organisms that can survive complexifying weather/rules and emergent interactions with other organisms. By doing so, the organisms develop instrumental goals, such as efficiently solving mazes and optimizing transport networks.
+---
 
-More work is to be done on experimentation, analysis, parameter searches, and the evolution of physics/rules.
+## Setup
 
-# Code Organization
-### ./
-- Here is where you create a new experiment and run it. 
-- ./nca_slim.py is a simple example experiment
-### ./coralai
-- This module contains all the necessary code for running coralai experiments
-### ./coralai/requirements
-- Currently only Pytorch NEAT, normal pip install are included in requirements.txt
-### ./coralai/substrate
-- The universe the coralai runs in. Mostly memory management and manipulation/evolution of organism architectures
-### ./coralai/dynamics
-- Code that modifies memory incl. physics, organisms (NCA), weather, and procedural content generation.
-### ./coralai/analysis
-- Visualizations, statistics, and experimental frameworks that track and evolve organisms over time.
-### ./coralai/instances
-- Specific instances of coralai, including basic random NCA and EINCASM (see below)
+Run all commands from the **repo root** (the directory containing `setup.sh`).
+
+**Conda (recommended):**
+```bash
+./setup.sh conda
+conda activate coralai
+```
+
+**Venv:**
+```bash
+./setup.sh venv
+source .venv/bin/activate       # Linux/macOS
+.venv\Scripts\activate          # Windows
+```
+
+`./setup.sh` auto-detects conda or venv if called without arguments. Requires Python 3.10+.
+
+---
+
+## Running
+
+**GUI (Mac Metal only):**
+```bash
+python coral_runner_space.py    # full coral ecosystem — most advanced runner
+python minimal_runner.py        # single-channel NCA
+python nca_runner.py            # NCA with RGB + hidden channels
+```
+
+**Headless (any platform):**
+```bash
+make run-minimal    # 64×64 minimal NCA
+make run-nca        # 48×48 NCA with RGB channels
+make run-coral      # 16×16 coral ecosystem
+make demo           # non-interactive 300-step demo, saves video to runs/
+# or directly:
+python headless_repl.py --experiment minimal --shape 64
+python headless_repl.py --experiment coral   --shape 32 --auto 500
+```
+
+See `AGENTS.md` for full REPL commands, profiling instructions, and known issues.
+
+---
+
+## Code Organization
+
+```
+./                              ← repo root — runners live here
+├── coral_runner_space.py       ← ACTIVE: continuous spatial NEAT ecosystem
+├── minimal_runner.py           ← simple single-channel NCA (Mac only)
+├── nca_runner.py               ← RGB NCA (Mac only)
+├── headless_repl.py            ← cross-platform headless runner + REPL
+├── xor_runner.py               ← NEAT XOR demo (sanity check)
+│
+└── coralai/                    ← main package
+    ├── substrate/              ← world memory: Substrate, Channel, visualization
+    ├── evolution/              ← evolvers and organism types
+    │   ├── space_evolver.py    ← ACTIVE evolver (spatial NEAT)
+    │   ├── neat_evolver.py     ← older explicit-generation evolver
+    │   └── ecosystem.py        ← older per-organism sequential evolver
+    ├── instances/              ← self-contained experiment configurations
+    │   ├── coral/              ← ACTIVE instance (physics, NEAT config)
+    │   ├── minimal/            ← single-channel NCA
+    │   ├── nca/                ← multi-channel NCA
+    │   ├── xor/                ← NEAT XOR demo
+    │   └── eincasm/            ← historical (broken refs, not runnable)
+    ├── dependencies/
+    │   └── PyTorch-NEAT/       ← vendored (no submodule init needed)
+    └── utils/
+        └── ti_struct_factory.py
+```
+
+**Instances** are self-contained experiment configurations — each folder defines its own channel layout, physics, and NEAT config. To create a new experiment: add a subfolder under `instances/`, define your physics and NEAT config, and write a runner script in the repo root.
+
+---
 
 ## EINCASM: Emergent Intelligence in Neural Cellular Automata Slime Molds
 
-This is the old title of this research, which has since been expanded to capture a larger diversity of emergent behaviors
+EINCASM is the predecessor to CoralAI, published at ALIFE 2023 in Sapporo, Japan. It featured a more elaborate biophysical model (muscles, ports, capital mining, waste) that has since been refactored. The `instances/eincasm/` folder preserves the design intent but references deleted modules and is not currently runnable.
 
-Conference paper presented at ALIFE 2023, Sapporo, Japan
 - **Paper:** https://direct.mit.edu/isal/proceedings/isal/35/82/116945
-- **Recording of Presentation:** https://www.youtube.com/watch?v=RuLQRgi6YSU&t=514s
-- **Workshop Discussion on Machine Love and Human Flourishing:** https://www.youtube.com/watch?v=tfQhXOBchKY
+- **Presentation recording:** https://www.youtube.com/watch?v=RuLQRgi6YSU&t=514s
+- **Workshop — Machine Love and Human Flourishing:** https://www.youtube.com/watch?v=tfQhXOBchKY
 
-# Contact
+---
 
-Feel free to reach out to aidanbx@gmail.com if you have questions or ideas
+## Contact
+
+Feel free to reach out to aidanbx@gmail.com if you have questions or ideas.
