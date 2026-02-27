@@ -56,18 +56,37 @@ class SpaceEvolver():
         self.ages = []
         self.combined_weights = []
         self.combined_biases = []
+        self._cached_cw = None
+        self._cached_cb = None
+        self._weights_dirty = True
+        self._scratch = {}
         self.init_population()
         self.init_substrate(self.genomes)
         self.time_last_cull = 0
     
 
+    def get_combined_weights(self):
+        if self._weights_dirty or self._cached_cw is None:
+            self._cached_cw = torch.stack(self.combined_weights, dim=0)
+            self._cached_cb = torch.stack(self.combined_biases, dim=0)
+            self._weights_dirty = False
+        return self._cached_cw, self._cached_cb
+
+    def _invalidate_weight_cache(self):
+        self._weights_dirty = True
+
+    def _get_scratch(self, key, like_tensor):
+        if key not in self._scratch or self._scratch[key].shape != like_tensor.shape:
+            self._scratch[key] = torch.zeros_like(like_tensor)
+        else:
+            self._scratch[key].zero_()
+        return self._scratch[key]
+
     def run(self, n_timesteps, vis, n_rad_spots, radiate_interval, cull_max_pop, cull_interval=100):
         timestep = 0
         while timestep < n_timesteps and vis.window.running:
-            combined_weights = torch.stack(self.combined_weights, dim=0)
-            combined_biases = torch.stack(self.combined_biases, dim=0)
+            combined_weights, combined_biases = self.get_combined_weights()
             self.step_sim(combined_weights, combined_biases)
-            # self.report_if_necessary(timestep)
             vis.update()
             if timestep % radiate_interval == 0:
                 self.apply_radiation_mutation(n_rad_spots)
@@ -76,8 +95,6 @@ class SpaceEvolver():
                 vis.next_generation = False
                 break
             if len(self.genomes) > cull_max_pop and (self.timestep - self.time_last_cull) > cull_interval:
-                # self.cull_genomes(cull_cell_thresh, cull_age_thresh)
-                # if len(self.genomes) > cull_max_pop:
                 self.reduce_population_to_threshold(cull_max_pop)
             timestep += 1
             self.timestep = timestep
@@ -98,7 +115,8 @@ class SpaceEvolver():
 
     def forward(self, weights, biases):
         inds = self.substrate.ti_indices[None]
-        out_mem = torch.zeros_like(self.substrate.mem[0, self.act_chinds])
+        out_mem = self._get_scratch("out_mem",
+                                    self.substrate.mem[0, self.act_chinds])
         apply_weights_and_biases(
             self.substrate.mem, out_mem,
             self.sense_chinds,
@@ -184,6 +202,7 @@ class SpaceEvolver():
         self.ages = new_ages
         self.combined_weights = new_combined_weights
         self.combined_biases = new_combined_biases
+        self._invalidate_weight_cache()
         self.time_last_cull = self.timestep
         print(f"\tPop size after reduction: {len(self.genomes)}")
         if len(self.genomes) == 0:
@@ -272,12 +291,12 @@ class SpaceEvolver():
 
 
     def add_organism_get_key(self, genome):
-        # TODO: implement culling and memory consolidation
         self.genomes.append(genome)
         net = self.create_torch_net(genome)
         self.combined_weights.append(net.weights)
         self.combined_biases.append(net.biases)
         self.ages.append(0)
+        self._invalidate_weight_cache()
         return len(self.combined_biases) - 1
     
 

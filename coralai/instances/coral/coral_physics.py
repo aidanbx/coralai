@@ -7,15 +7,18 @@ from ...substrate.nn_lib import ch_norm
 
 def activate_outputs(substrate):
     inds = substrate.ti_indices[None]
-    substrate.mem[:, inds.com] = torch.sigmoid(ch_norm(substrate.mem[:, inds.com]))
-    substrate.mem[:, [inds.acts_invest, inds.acts_liquidate]] = torch.softmax(substrate.mem[0, [inds.acts_invest, inds.acts_liquidate]], dim=0)
+    mem = substrate.mem
 
-    substrate.mem[:, inds.acts_explore] = nn.ReLU()(substrate.mem[:, inds.acts_explore])
-    mean_activation = torch.mean(substrate.mem[0, inds.acts_explore], dim=0)
-    substrate.mem[0, inds.acts_explore[0]] = mean_activation
-    substrate.mem[0, inds.acts_explore] = torch.softmax(substrate.mem[0, inds.acts_explore], dim=0)
+    mem[:, inds.com] = torch.sigmoid(ch_norm(mem[:, inds.com]))
+    mem[:, [inds.acts_invest, inds.acts_liquidate]] = torch.softmax(
+        mem[0, [inds.acts_invest, inds.acts_liquidate]], dim=0)
 
-    substrate.mem[0, inds.acts] = torch.where(substrate.mem[0, inds.genome] < 0, 0, substrate.mem[0, inds.acts])
+    explore_vals = torch.relu(mem[0, inds.acts_explore])
+    explore_vals[0] = explore_vals.mean(dim=0)
+    mem[0, inds.acts_explore] = torch.softmax(explore_vals, dim=0)
+
+    dead_mask = (mem[0, inds.genome] < 0).unsqueeze(0).expand_as(mem[0, inds.acts])
+    mem[0, inds.acts] = torch.where(dead_mask, torch.zeros(1, device=mem.device), mem[0, inds.acts])
 
 
 @ti.kernel
@@ -25,22 +28,27 @@ def apply_weights_and_biases(mem: ti.types.ndarray(), out_mem: ti.types.ndarray(
                              dir_kernel: ti.types.ndarray(), dir_order: ti.types.ndarray(),
                              ti_inds: ti.template()):
     inds = ti_inds[None]
-    for i, j, act_k in ti.ndrange(mem.shape[2], mem.shape[3], out_mem.shape[0]):
-        val = 0.0
-        rot = mem[0, inds.rot, i, j]
+    for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
         genome_key = int(mem[0, inds.genome, i, j])
-        for sense_ch_n in ti.ndrange(sense_chinds.shape[0]):
-            # base case [0,0]
-            start_weight_ind = sense_ch_n * (dir_kernel.shape[0]+1)
-            val += (mem[0, sense_chinds[sense_ch_n], i, j] *
-                    combined_weights[genome_key, 0, act_k, start_weight_ind])
-            for offset_m in ti.ndrange(dir_kernel.shape[0]):
-                ind = int((rot+dir_order[offset_m]) % dir_kernel.shape[0])
-                neigh_x = (i + dir_kernel[ind, 0]) % mem.shape[2]
-                neigh_y = (j + dir_kernel[ind, 1]) % mem.shape[3]
-                weight_ind = start_weight_ind + offset_m
-                val += mem[0, sense_chinds[sense_ch_n], neigh_x, neigh_y] * combined_weights[genome_key, 0, act_k, weight_ind]
-        out_mem[act_k, i, j] = val + combined_biases[genome_key, 0, act_k, 0]
+        if genome_key < 0 or genome_key >= combined_weights.shape[0]:
+            for act_k in range(out_mem.shape[0]):
+                out_mem[act_k, i, j] = 0.0
+        else:
+            rot = int(mem[0, inds.rot, i, j])
+            n_dirs = dir_kernel.shape[0]
+            for act_k in range(out_mem.shape[0]):
+                val = 0.0
+                for sense_ch_n in ti.ndrange(sense_chinds.shape[0]):
+                    start_weight_ind = sense_ch_n * (n_dirs + 1)
+                    val += (mem[0, sense_chinds[sense_ch_n], i, j] *
+                            combined_weights[genome_key, 0, act_k, start_weight_ind])
+                    for offset_m in ti.ndrange(n_dirs):
+                        ind = (rot + int(dir_order[offset_m]) + n_dirs) % n_dirs
+                        neigh_x = (i + dir_kernel[ind, 0]) % mem.shape[2]
+                        neigh_y = (j + dir_kernel[ind, 1]) % mem.shape[3]
+                        weight_ind = start_weight_ind + offset_m
+                        val += mem[0, sense_chinds[sense_ch_n], neigh_x, neigh_y] * combined_weights[genome_key, 0, act_k, weight_ind]
+                out_mem[act_k, i, j] = val + combined_biases[genome_key, 0, act_k, 0]
 
 
 @ti.kernel
@@ -63,8 +71,8 @@ def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
             if neigh_max_act_i == 0:
                 continue
             neigh_max_act_i -= 1 # aligns with dir_kernel now
-            neigh_rot = mem[0, inds.rot, neigh_x, neigh_y] # represents the dir the cell is pointing
-            neigh_dir_ind = int((neigh_rot+dir_order[neigh_max_act_i]) % dir_kernel.shape[0])
+            neigh_rot = int(mem[0, inds.rot, neigh_x, neigh_y])
+            neigh_dir_ind = (neigh_rot + int(dir_order[neigh_max_act_i]) + dir_kernel.shape[0]) % dir_kernel.shape[0]
             neigh_dir_x = dir_kernel[neigh_dir_ind, 0]
             neigh_dir_y = dir_kernel[neigh_dir_ind, 1]
             bid = 0.0
@@ -77,28 +85,39 @@ def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
                 if bid > max_bid:
                     max_bid = bid
                     winning_genome = mem[0, inds.genome, neigh_x, neigh_y]
-                    winning_rot = (neigh_rot+dir_order[neigh_max_act_i]) % dir_kernel.shape[0] # aligns with the dir the winning neighbor explored from
+                    winning_rot = (neigh_rot + int(dir_order[neigh_max_act_i]) + dir_kernel.shape[0]) % dir_kernel.shape[0]
         winning_genomes[i, j] = winning_genome
         winning_rots[i, j] = winning_rot
 
 
+_explore_scratch = {}
+
 def explore_physics(substrate, dir_kernel, dir_order):
     inds = substrate.ti_indices[None]
+    grid_shape = substrate.mem[0, inds.infra].shape
+    device = substrate.torch_device
 
-    max_act_i = torch.argmax(substrate.mem[0, inds.acts_explore], dim=0) # be warned, this is the index of the actuator not the index in memory, so 0-6 not
-    infra_delta = torch.zeros_like(substrate.mem[0, inds.infra])
-    energy_delta = torch.zeros_like(infra_delta)
-    winning_genome = torch.zeros_like(substrate.mem[0, inds.genome])
-    winning_rots = torch.zeros_like(substrate.mem[0, inds.rot])
+    max_act_i = torch.argmax(substrate.mem[0, inds.acts_explore], dim=0)
+
+    if "infra_delta" not in _explore_scratch or _explore_scratch["infra_delta"].shape != grid_shape:
+        _explore_scratch["infra_delta"] = torch.zeros(grid_shape, dtype=substrate.mem.dtype, device=device)
+        _explore_scratch["energy_delta"] = torch.zeros(grid_shape, dtype=substrate.mem.dtype, device=device)
+        _explore_scratch["winning_genome"] = torch.zeros(grid_shape, dtype=substrate.mem.dtype, device=device)
+        _explore_scratch["winning_rots"] = torch.zeros(grid_shape, dtype=substrate.mem.dtype, device=device)
+    else:
+        _explore_scratch["infra_delta"].zero_()
+        _explore_scratch["energy_delta"].zero_()
+        _explore_scratch["winning_genome"].zero_()
+        _explore_scratch["winning_rots"].zero_()
+
     explore(substrate.mem, max_act_i,
-            infra_delta, energy_delta,
-            winning_genome, winning_rots,
+            _explore_scratch["infra_delta"], _explore_scratch["energy_delta"],
+            _explore_scratch["winning_genome"], _explore_scratch["winning_rots"],
             dir_kernel, dir_order, substrate.ti_indices)
-    # handle_investment(substrate, infra_delta)
-    substrate.mem[0, inds.infra] += infra_delta
-    substrate.mem[0, inds.energy] += energy_delta
-    substrate.mem[0, inds.genome] = winning_genome
-    substrate.mem[0, inds.rot] = winning_rots
+    substrate.mem[0, inds.infra] += _explore_scratch["infra_delta"]
+    substrate.mem[0, inds.energy] += _explore_scratch["energy_delta"]
+    substrate.mem[0, inds.genome] = _explore_scratch["winning_genome"]
+    substrate.mem[0, inds.rot] = _explore_scratch["winning_rots"]
 
 
 @ti.kernel
@@ -152,12 +171,15 @@ def flow_energy_up(mem: ti.types.ndarray(), out_energy_mem: ti.types.ndarray(),
             neigh_x = (i + kernel[off_n, 0]) % mem.shape[2]
             neigh_y = (j + kernel[off_n, 1]) % mem.shape[3]
             infra_sum += mem[0, inds.infra, neigh_x, neigh_y]
-        for off_n in ti.ndrange(kernel.shape[0]):
-            neigh_x = (i + kernel[off_n, 0]) % mem.shape[2]
-            neigh_y = (j + kernel[off_n, 1]) % mem.shape[3]
-            neigh_infra = mem[0, inds.infra, neigh_x, neigh_y]
-            out_energy_mem[neigh_x, neigh_y] += (
-                central_energy * ((neigh_infra/infra_sum)))
+        if infra_sum > 1e-8:
+            for off_n in ti.ndrange(kernel.shape[0]):
+                neigh_x = (i + kernel[off_n, 0]) % mem.shape[2]
+                neigh_y = (j + kernel[off_n, 1]) % mem.shape[3]
+                neigh_infra = mem[0, inds.infra, neigh_x, neigh_y]
+                out_energy_mem[neigh_x, neigh_y] += (
+                    central_energy * (neigh_infra / infra_sum))
+        else:
+            out_energy_mem[i, j] += central_energy
             
 @ti.kernel
 def distribute_infra(mem: ti.types.ndarray(), out_infra: ti.types.ndarray(), max_infra: ti.f32, kernel: ti.types.ndarray(), ti_inds: ti.template()):
@@ -172,22 +194,28 @@ def distribute_infra(mem: ti.types.ndarray(), out_infra: ti.types.ndarray(), max
             out_infra[i, j] += mem[0, inds.infra, i, j]
     
 
+_energy_scratch = {}
+
 def energy_physics(substrate, kernel, max_infra, max_energy):
-    # TODO: Implement infra->energy conversion, apply before energy flow
     inds = substrate.ti_indices[None]
-    # substrate.mem[0, inds.infra] = torch.clamp(substrate.mem[0, inds.infra], 0.0001, 100)
+    grid_shape = substrate.mem[0, inds.energy].shape
+    device = substrate.torch_device
 
-    energy_out_mem = torch.zeros_like(substrate.mem[0, inds.energy])
-    flow_energy_up(substrate.mem, energy_out_mem, kernel, substrate.ti_indices)
-    substrate.mem[0, inds.energy] = energy_out_mem
+    if "energy_out" not in _energy_scratch or _energy_scratch["energy_out"].shape != grid_shape:
+        _energy_scratch["energy_out"] = torch.zeros(grid_shape, dtype=substrate.mem.dtype, device=device)
+        _energy_scratch["infra_out"] = torch.zeros(grid_shape, dtype=substrate.mem.dtype, device=device)
+    
+    _energy_scratch["energy_out"].zero_()
+    flow_energy_up(substrate.mem, _energy_scratch["energy_out"], kernel, substrate.ti_indices)
+    substrate.mem[0, inds.energy] = _energy_scratch["energy_out"]
 
-    energy_out_mem = torch.zeros_like(substrate.mem[0, inds.energy])
-    distribute_energy(substrate.mem, energy_out_mem, max_energy, kernel, substrate.ti_indices)
-    substrate.mem[0, inds.energy] = energy_out_mem
+    _energy_scratch["energy_out"].zero_()
+    distribute_energy(substrate.mem, _energy_scratch["energy_out"], max_energy, kernel, substrate.ti_indices)
+    substrate.mem[0, inds.energy] = _energy_scratch["energy_out"]
 
-    infra_out_mem = torch.zeros_like(substrate.mem[0, inds.infra])
-    distribute_infra(substrate.mem, infra_out_mem, max_infra, kernel, substrate.ti_indices)
-    substrate.mem[0, inds.infra] = infra_out_mem
+    _energy_scratch["infra_out"].zero_()
+    distribute_infra(substrate.mem, _energy_scratch["infra_out"], max_infra, kernel, substrate.ti_indices)
+    substrate.mem[0, inds.infra] = _energy_scratch["infra_out"]
 
 
 def invest_liquidate(substrate):
