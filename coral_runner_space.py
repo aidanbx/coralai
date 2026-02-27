@@ -2,9 +2,9 @@ import os
 import torch
 import neat
 import taichi as ti
-from coralai.substrate.substrate import Substrate
-from coralai.evolution.space_evolver import SpaceEvolver
-from coralai.substrate.visualization import Visualization
+from coralai.substrate import Substrate
+from coralai.evolver import SpaceEvolver
+from coralai.visualization import Visualization
 
 class CoralVis(Visualization):
     def __init__(self, substrate, evolver, vis_chs):

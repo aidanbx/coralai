@@ -58,7 +58,7 @@ args = parser.parse_args()
 ti.init(ti.cpu)
 TORCH_DEVICE = torch.device("cpu")
 
-from coralai.substrate.substrate import Substrate
+from coralai.substrate import Substrate
 from coralai.evolution.neat_organism import NeatOrganism
 from coralai.evolution.cppn_organism import CPPNOrganism
 from coralai.instances.minimal.minimal_organism_cnn import MinimalOrganismCNN

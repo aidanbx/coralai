@@ -37,9 +37,9 @@ backend_map = {"cpu": ti.cpu, "metal": ti.metal, "cuda": ti.cuda,
 ti.init(backend_map[args.backend])
 DEVICE = torch.device(args.device)
 
-from coralai.substrate.substrate import Substrate
-from coralai.evolution.space_evolver import SpaceEvolver
-from coralai.substrate.visualization import Visualization
+from coralai.substrate import Substrate
+from coralai.evolver import SpaceEvolver
+from coralai.visualization import Visualization
 from coralai.instances.coral.coral_physics import (
     activate_outputs, invest_liquidate, explore_physics, energy_physics,
     apply_weights_and_biases)

@@ -18,8 +18,8 @@ import neat
 
 ti.init(ti.cpu)
 
-from coralai.substrate.substrate import Substrate
-from coralai.evolution.space_evolver import SpaceEvolver
+from coralai.substrate import Substrate
+from coralai.evolver import SpaceEvolver
 from coralai.instances.coral.coral_physics import (
     activate_outputs, invest_liquidate, explore_physics, energy_physics,
     apply_weights_and_biases,

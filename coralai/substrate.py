@@ -4,7 +4,7 @@ import torch
 import os
 import taichi as ti
 import numpy as np
-from ..utils.ti_struct_factory import TaichiStructFactory
+from .utils.ti_struct_factory import TaichiStructFactory
 from .channel import Channel
 from .substrate_index import SubstrateIndex
 

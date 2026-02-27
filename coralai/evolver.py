@@ -19,7 +19,7 @@ from coralai.instances.coral.coral_physics import invest_liquidate, explore_phys
 # from pytorch_neat.cppn import create_cppn
 from pytorch_neat.activations import identity_activation
 from pytorch_neat.linear_net import LinearNet
-from ..substrate.nn_lib import ch_norm
+from .nn_lib import ch_norm
 
 @ti.data_oriented
 class SpaceEvolver():
