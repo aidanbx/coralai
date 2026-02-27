@@ -69,7 +69,7 @@ DEVICE = torch.device(args.device)
 
 from coralai.substrate import Substrate
 from coralai.evolver import SpaceEvolver
-from coralai.instances.coral.coral_physics import (
+from experiments.coral.physics import (
     activate_outputs, invest_liquidate, explore_physics, energy_physics,
     apply_weights_and_biases)
 
@@ -93,7 +93,7 @@ def build_evolver(shape, device, occupancy=1.0):
 
     local_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(local_dir,
-                               "coralai/instances/coral/coral_neat.config")
+                               "experiments/coral/neat.config")
     kernel = [[0, 0], [1, 0], [1, 1], [0, 1], [-1, 1],
               [-1, 0], [-1, -1], [0, -1], [1, -1]]
     dir_order = [0, -1, 1]

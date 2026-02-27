@@ -59,10 +59,8 @@ ti.init(ti.cpu)
 TORCH_DEVICE = torch.device("cpu")
 
 from coralai.substrate import Substrate
-from coralai.evolution.neat_organism import NeatOrganism
-from coralai.evolution.cppn_organism import CPPNOrganism
-from coralai.instances.minimal.minimal_organism_cnn import MinimalOrganismCNN
-from coralai.instances.minimal.minimal_organism_hyper import MinimalOrganismHyper
+# Legacy experiment classes (minimal, nca, coral-old) are broken stubs — imported
+# lazily inside their setup functions so they don't break the coral experiment path.
 
 # ---------------------------------------------------------------------------
 # Run directory
@@ -202,7 +200,7 @@ def setup_minimal(shape):
     substrate.malloc()
     local_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(local_dir,
-                               "coralai/instances/minimal/minimal_neat.config")
+                               "experiments/minimal/minimal_neat.config")
     kernel = [[-1, -1], [0, -1], [1, -1],
               [-1,  0], [0,  0], [1,  0],
               [-1,  1], [0,  1], [1,  1]]
@@ -260,7 +258,7 @@ def setup_nca(shape):
 
     import neat
     from coralai.evolution.neat_evolver import NEATEvolver
-    from coralai.substrate.nn_lib import ch_norm
+    from coralai.nn_lib import ch_norm
 
     kernel = torch.tensor([[0, -1], [-1, 0], [0, 0], [1, 0], [0, 1]],
                           device=TORCH_DEVICE)
@@ -334,7 +332,7 @@ def setup_coral(shape):
 
     local_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(local_dir,
-                               "coralai/instances/coral/coral_neat.config")
+                               "experiments/coral/neat.config")
     kernel = torch.tensor([[0, -1], [-1, 0], [0, 0], [1, 0], [0, 1]],
                           device=TORCH_DEVICE)
     sense_chs = ["energy", "infra", "com"]

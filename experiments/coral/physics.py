@@ -2,7 +2,7 @@ import torch
 import taichi as ti
 import torch.nn as nn
 
-from ...nn_lib import ch_norm
+from coralai.nn_lib import ch_norm
 
 
 def activate_outputs(substrate):

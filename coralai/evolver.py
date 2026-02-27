@@ -14,7 +14,7 @@ import taichi as ti
 import torch.nn as nn
 
 
-from coralai.instances.coral.coral_physics import invest_liquidate, explore_physics, energy_physics, activate_outputs, apply_weights_and_biases
+from experiments.coral.physics import invest_liquidate, explore_physics, energy_physics, activate_outputs, apply_weights_and_biases
 
 # from pytorch_neat.cppn import create_cppn
 from pytorch_neat.activations import identity_activation

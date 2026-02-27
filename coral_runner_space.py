@@ -83,7 +83,7 @@ if __name__ == "__main__":
     ti.init(ti.metal)
     torch_device = torch.device("mps")
     main(
-        config_filename = "coralai/instances/coral/coral_neat.config",
+        config_filename = "experiments/coral/neat.config",
         channels = {
             "energy": ti.f32,
             "infra": ti.f32,
