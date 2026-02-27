@@ -33,36 +33,6 @@ def activate_outputs(substrate):
 
 
 @ti.kernel
-def apply_weights_and_biases(mem: ti.types.ndarray(), out_mem: ti.types.ndarray(),
-                             sense_chinds: ti.types.ndarray(),
-                             combined_weights: ti.types.ndarray(), combined_biases: ti.types.ndarray(),
-                             dir_kernel: ti.types.ndarray(), dir_order: ti.types.ndarray(),
-                             ti_inds: ti.template()):
-    inds = ti_inds[None]
-    for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
-        genome_key = int(mem[0, inds.genome, i, j])
-        if genome_key < 0 or genome_key >= combined_weights.shape[0]:
-            for act_k in range(out_mem.shape[0]):
-                out_mem[act_k, i, j] = 0.0
-        else:
-            rot = int(mem[0, inds.rot, i, j])
-            n_dirs = dir_kernel.shape[0]
-            for act_k in range(out_mem.shape[0]):
-                val = 0.0
-                for sense_ch_n in ti.ndrange(sense_chinds.shape[0]):
-                    start_weight_ind = sense_ch_n * (n_dirs + 1)
-                    val += (mem[0, sense_chinds[sense_ch_n], i, j] *
-                            combined_weights[genome_key, 0, act_k, start_weight_ind])
-                    for offset_m in ti.ndrange(n_dirs):
-                        ind = (rot + int(dir_order[offset_m]) + n_dirs) % n_dirs
-                        neigh_x = (i + dir_kernel[ind, 0]) % mem.shape[2]
-                        neigh_y = (j + dir_kernel[ind, 1]) % mem.shape[3]
-                        weight_ind = start_weight_ind + offset_m
-                        val += mem[0, sense_chinds[sense_ch_n], neigh_x, neigh_y] * combined_weights[genome_key, 0, act_k, weight_ind]
-                out_mem[act_k, i, j] = val + combined_biases[genome_key, 0, act_k, 0]
-
-
-@ti.kernel
 def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
             infra_delta: ti.types.ndarray(), energy_delta: ti.types.ndarray(),
             winning_genomes: ti.types.ndarray(), winning_rots: ti.types.ndarray(),

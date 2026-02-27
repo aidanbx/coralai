@@ -38,11 +38,10 @@ ti.init(backend_map[args.backend])
 DEVICE = torch.device(args.device)
 
 from coralai.substrate import Substrate
-from coralai.evolver import SpaceEvolver
+from coralai.evolver import SpaceEvolver, apply_weights_and_biases
 from coralai.visualization import Visualization
 from experiments.coral.physics import (
-    activate_outputs, invest_liquidate, explore_physics, energy_physics,
-    apply_weights_and_biases)
+    activate_outputs, invest_liquidate, explore_physics, energy_physics)
 
 
 class ProfiledCoralVis(Visualization):

@@ -68,10 +68,9 @@ ti.init(backend_map[args.backend])
 DEVICE = torch.device(args.device)
 
 from coralai.substrate import Substrate
-from coralai.evolver import SpaceEvolver
+from coralai.evolver import SpaceEvolver, apply_weights_and_biases
 from experiments.coral.physics import (
-    activate_outputs, invest_liquidate, explore_physics, energy_physics,
-    apply_weights_and_biases)
+    activate_outputs, invest_liquidate, explore_physics, energy_physics)
 
 
 def build_evolver(shape, device, occupancy=1.0):
