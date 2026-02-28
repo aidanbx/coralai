@@ -105,9 +105,32 @@ class CoralVis(Visualization):
         pw = self.panel_wfrac
         n_chs = self.substrate.mem.shape[1]
 
-        # -- Panel 1: Display (norm + channel pickers) — y=0.01..0.40 -------
-        with self.gui.sub_window("Display", px, 0.01, pw, 0.40) as sw:
-            self._norm_view_window(sw)
+        # -- Panel 1: Display — y=0.01..0.46 ---------------------------------
+        with self.gui.sub_window("Display", px, 0.01, pw, 0.46) as sw:
+            self._draw_norm_controls(sw)
+            # Presets: set chinds AND view_mode together so buttons always
+            # do what their label says, regardless of slider state.
+            if sw.button("E | I | Rot"):
+                self.chinds[0] = int(inds.energy)
+                self.chinds[1] = int(inds.infra)
+                self.chinds[2] = int(inds.rot)
+                self.view_mode = 0
+            if sw.button("Genome | E | I"):
+                self.chinds[0] = int(inds.genome)
+                self.chinds[1] = int(inds.energy)
+                self.chinds[2] = int(inds.infra)
+                self.view_mode = 0
+            if sw.button("Energy only"):
+                self.chinds[0] = int(inds.energy)
+                self.view_mode = 1
+            if sw.button("Infra only"):
+                self.chinds[1] = int(inds.infra)
+                self.view_mode = 2
+            if sw.button("Genome only"):
+                self.chinds[0] = int(inds.genome)
+                self.view_mode = 1
+            # Fine-grained sliders: change which channel is in each slot.
+            # view_mode is unchanged; press a preset to re-sync if needed.
             self.chinds[0] = sw.slider_int(
                 f"R: {self.substrate.index_to_chname(int(self.chinds[0]))}",
                 int(self.chinds[0]), 0, n_chs - 1)
@@ -117,9 +140,10 @@ class CoralVis(Visualization):
             self.chinds[2] = sw.slider_int(
                 f"B: {self.substrate.index_to_chname(int(self.chinds[2]))}",
                 int(self.chinds[2]), 0, n_chs - 1)
+            self.paused = sw.checkbox("Pause", self.paused)
 
-        # -- Panel 2: Stats — y=0.41..0.99 -----------------------------------
-        with self.gui.sub_window("Stats", px, 0.41, pw, 0.58) as sw:
+        # -- Panel 2: Stats — y=0.47..0.99 -----------------------------------
+        with self.gui.sub_window("Stats", px, 0.47, pw, 0.52) as sw:
             pos = self.window.get_cursor_pos()
             # Remap cursor x from full-window fraction to simulation fraction
             sim_frac = self.sim_w / self.image.shape[0]

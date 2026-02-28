@@ -248,9 +248,52 @@ class SpaceEvolver():
             self.init_substrate(self.genomes)
 
 
-    def save_checkpoint(self, folderpath):
-        # Saves population, substrate (mem and metadata)
-        pass
+    def save_checkpoint(self, run_dir, step):
+        """Save substrate + population to run_dir/checkpoint_NNNNNNN/.
+
+        Files written:
+          substrate.pt     — substrate.mem tensor (CPU, device-agnostic)
+          population.pkl   — genomes, ages, weights, biases, timestep
+          meta.json        — step, timestamp, git hash, grid shape
+        """
+        import json
+        import pickle
+        import subprocess
+
+        ckpt_dir = os.path.join(run_dir, f"checkpoint_{step:07d}")
+        os.makedirs(ckpt_dir, exist_ok=True)
+
+        torch.save(self.substrate.mem.cpu(),
+                   os.path.join(ckpt_dir, "substrate.pt"))
+
+        pop_data = {
+            "genomes":  self.genomes,
+            "ages":     self.ages,
+            "weights":  [w.cpu() for w in self.combined_weights],
+            "biases":   [b.cpu() for b in self.combined_biases],
+            "timestep": self.timestep,
+        }
+        with open(os.path.join(ckpt_dir, "population.pkl"), "wb") as f:
+            pickle.dump(pop_data, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+        try:
+            git_hash = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+            ).decode().strip()
+        except Exception:
+            git_hash = "unknown"
+
+        meta = {
+            "step":      step,
+            "timestamp": datetime.now().isoformat(),
+            "git_hash":  git_hash,
+            "shape":     [self.substrate.w, self.substrate.h],
+            "n_genomes": len(self.genomes),
+        }
+        with open(os.path.join(ckpt_dir, "meta.json"), "w") as f:
+            json.dump(meta, f, indent=2)
+
+        print(f"  [checkpoint] step {step:,} → {ckpt_dir}")
     
     def report_if_necessary(self, fitness_function, n=None):
         for i in range(len(self.genomes)):

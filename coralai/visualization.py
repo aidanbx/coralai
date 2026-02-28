@@ -223,9 +223,8 @@ class Visualization:
         self.perturbation_strength = sub_w.slider_float(
             "Perturbation strength", self.perturbation_strength, 0.0, 5.0)
 
-    def _norm_view_window(self, sub_w):
-        """Norm mode + view mode controls — drawn in a separate sub_window."""
-        # Norm mode
+    def _draw_norm_controls(self, sub_w):
+        """Norm mode buttons + conditional parameter slider."""
         norm_labels = ["* Max-norm", "* Reinhard", "* Percentile", "* Log"]
         plain_labels = ["  Max-norm", "  Reinhard", "  Percentile", "  Log"]
         for i, (active, plain) in enumerate(zip(norm_labels, plain_labels)):
@@ -239,7 +238,14 @@ class Visualization:
             self.percentile_p = sub_w.slider_float(
                 "Percentile", self.percentile_p, 80.0, 100.0)
 
-        # View mode — use channel names when available
+    def _draw_view_controls(self, sub_w):
+        """View mode buttons (labels derived from initial chids).
+
+        NOTE: these only change self.view_mode (the channel mask). They do NOT
+        update self.chinds. Subclasses that allow chinds to change (e.g. via
+        sliders) should use preset buttons that update both chinds and view_mode
+        together rather than calling this method.
+        """
         def _ch_name(i):
             return self.chids[i] if i < len(self.chids) else f"ch{i}"
 
@@ -254,6 +260,13 @@ class Visualization:
             marker = "* " if self.view_mode == i else "  "
             if sub_w.button(marker + label):
                 self.view_mode = i
+
+    def _norm_view_window(self, sub_w):
+        """Norm controls + view controls combined (for simple experiments with
+        fixed chinds). For experiments with mutable chinds (sliders), call
+        _draw_norm_controls() and manage view/channel selection yourself."""
+        self._draw_norm_controls(sub_w)
+        self._draw_view_controls(sub_w)
 
     def render_opt_window(self):
         """Draw the base GUI panel. Subclasses can override this entirely and

@@ -29,9 +29,11 @@ Usage:
 """
 
 import argparse
+import csv
 import os
 import time
 from collections import defaultdict
+from datetime import datetime
 
 import torch
 import taichi as ti
@@ -58,6 +60,10 @@ parser.add_argument("--seed", type=int, default=42,
                     help="Random seed (used with --benchmark)")
 parser.add_argument("--radiate-interval", type=int, default=50)
 parser.add_argument("--cull-max-pop", type=int, default=100)
+parser.add_argument("--checkpoint-interval", type=int, default=1000,
+                    help="Steps between checkpoints (0 = disable)")
+parser.add_argument("--log-interval", type=int, default=10,
+                    help="Steps between CSV log rows")
 args = parser.parse_args()
 
 backend_map = {"cpu": ti.cpu, "metal": ti.metal,
@@ -108,9 +114,28 @@ class CoralVis(Visualization):
         pw = self.panel_wfrac
         n_chs = self.substrate.mem.shape[1]
 
-        # -- Panel 1: Display (norm + channel pickers) — y=0.01..0.40 -------
-        with self.gui.sub_window("Display", px, 0.01, pw, 0.40) as sw:
-            self._norm_view_window(sw)
+        # -- Panel 1: Display — y=0.01..0.46 ---------------------------------
+        with self.gui.sub_window("Display", px, 0.01, pw, 0.46) as sw:
+            self._draw_norm_controls(sw)
+            if sw.button("E | I | Rot"):
+                self.chinds[0] = int(inds.energy)
+                self.chinds[1] = int(inds.infra)
+                self.chinds[2] = int(inds.rot)
+                self.view_mode = 0
+            if sw.button("Genome | E | I"):
+                self.chinds[0] = int(inds.genome)
+                self.chinds[1] = int(inds.energy)
+                self.chinds[2] = int(inds.infra)
+                self.view_mode = 0
+            if sw.button("Energy only"):
+                self.chinds[0] = int(inds.energy)
+                self.view_mode = 1
+            if sw.button("Infra only"):
+                self.chinds[1] = int(inds.infra)
+                self.view_mode = 2
+            if sw.button("Genome only"):
+                self.chinds[0] = int(inds.genome)
+                self.view_mode = 1
             self.chinds[0] = sw.slider_int(
                 f"R: {self.substrate.index_to_chname(int(self.chinds[0]))}",
                 int(self.chinds[0]), 0, n_chs - 1)
@@ -120,11 +145,11 @@ class CoralVis(Visualization):
             self.chinds[2] = sw.slider_int(
                 f"B: {self.substrate.index_to_chname(int(self.chinds[2]))}",
                 int(self.chinds[2]), 0, n_chs - 1)
+            self.paused = sw.checkbox("Pause", self.paused)
 
-        # -- Panel 2: Stats — y=0.41..0.99 -----------------------------------
-        with self.gui.sub_window("Stats", px, 0.41, pw, 0.58) as sw:
+        # -- Panel 2: Stats — y=0.47..0.99 -----------------------------------
+        with self.gui.sub_window("Stats", px, 0.47, pw, 0.52) as sw:
             pos = self.window.get_cursor_pos()
-            # Remap cursor x from full-window fraction to simulation fraction
             sim_frac = self.sim_w / self.image.shape[0]
             cx = int((pos[0] / sim_frac) * self.w) % self.w
             cy = int(pos[1] * self.h) % self.h
@@ -195,10 +220,28 @@ def main():
     fps_window = []
     fps_print_interval = 2.0
     last_fps_time = time.time()
+    last_fps = 0.0
     t_session = time.time()
     max_steps = args.steps if args.steps > 0 else 10 ** 9
 
-    print(f"Coral | {shape[0]}x{shape[1]} | {args.backend}/{args.device} | "
+    # ---- Run directory + CSV logger ----------------------------------------
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    run_dir = os.path.join(
+        repo_root, "runs",
+        f"coral_dev_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    os.makedirs(run_dir, exist_ok=True)
+    log_path = os.path.join(run_dir, "step_log.csv")
+    log_file = open(log_path, "w", newline="")
+    log_writer = csv.writer(log_file)
+    log_writer.writerow([
+        "step", "total_energy", "total_infra", "energy_pct",
+        "n_alive", "n_genomes", "energy_offset", "fps",
+    ])
+    print(f"Run dir: {run_dir}")
+    # ------------------------------------------------------------------------
+
+    print(f"Coral-dev | {shape[0]}x{shape[1]} | {args.backend}/{args.device} | "
           f"GUI={'OFF' if headless else 'ON'} | "
           f"{'benchmark' if args.benchmark else 'profile' if args.profile else 'run'}")
     print("-" * 60)
@@ -276,18 +319,38 @@ def main():
         now = time.time()
         fps_window.append(dt)
         if now - last_fps_time >= fps_print_interval:
-            fps = len(fps_window) / sum(fps_window)
+            last_fps = len(fps_window) / sum(fps_window)
             alive_n = (substrate.mem[0, inds.genome] >= 0).sum().item()
             if vis:
-                vis.fps_history.append(fps)
-            print(f"  step {step+1:5d} | {fps:5.1f} FPS | "
+                vis.fps_history.append(last_fps)
+            print(f"  step {step+1:5d} | {last_fps:5.1f} FPS | "
                   f"{1000*sum(fps_window)/len(fps_window):5.1f}ms/step | "
                   f"alive: {alive_n:,} | genomes: {len(evolver.genomes)}")
             fps_window = []
             last_fps_time = now
 
+        # ---- CSV logging ----------------------------------------------------
+        if not args.benchmark and step % args.log_interval == 0:
+            tot_e = float(substrate.mem[0, inds.energy].sum())
+            tot_i = float(substrate.mem[0, inds.infra].sum())
+            alive_n = int((substrate.mem[0, inds.genome] >= 0).sum())
+            log_writer.writerow([
+                step, f"{tot_e:.4f}", f"{tot_i:.4f}",
+                f"{100 * tot_e / (tot_e + tot_i + 1e-8):.2f}",
+                alive_n, len(evolver.genomes),
+                f"{evolver.energy_offset:.4f}", f"{last_fps:.2f}",
+            ])
+            log_file.flush()
+
+        # ---- Periodic checkpoint --------------------------------------------
+        if (not args.benchmark and args.checkpoint_interval > 0
+                and step > 0 and step % args.checkpoint_interval == 0):
+            evolver.save_checkpoint(run_dir, step)
+
         if vis and not vis.window.running:
             break
+
+    log_file.close()
 
     total = time.time() - t_session
     n = len(step_times)
@@ -299,6 +362,7 @@ def main():
     print(f"  {n} steps in {total:.2f}s  |  avg {avg_fps:.1f} FPS  |  "
           f"median {median_ms:.1f}ms/step")
     print(f"  alive: {alive_final:,}  |  genomes: {len(evolver.genomes)}")
+    print(f"  log: {log_path}")
     print(f"{'='*60}")
 
     if args.profile or args.benchmark:
