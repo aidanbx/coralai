@@ -1,9 +1,12 @@
 """
-Coral experiment runner — THESIS VERSION (preserved as-is).
+Coral experiment runner — DEVELOPMENT VERSION.
 
-This is the exact configuration used for the Master's Thesis (2024). Physics,
-channel layout, and evolution parameters are frozen. Do not modify for
-experiments — use experiments/coral_dev/ for ongoing development.
+Active development branch. Diverges from the thesis version (experiments/coral/)
+with physics fixes and ongoing improvements. Current changes vs. thesis:
+
+  - softmax invest/liquidate → tanh signed trade (physics.py activate_outputs)
+
+See logs/ for design rationale on each change.
 
 Runs the spatial NEAT coral simulation with optional GUI, profiling, or
 benchmark modes.
