@@ -48,11 +48,11 @@ parser.add_argument("--device", type=str, default="mps",
 parser.add_argument("--no-gui", action="store_true",
                     help="Headless: skip rendering")
 parser.add_argument("--profile", action="store_true",
-                    help="Print per-function timing breakdown on exit")
+                    help="Print per-category timing breakdown on exit")
 parser.add_argument("--benchmark", action="store_true",
                     help="Seed RNG, fill all cells, measure worst-case throughput")
 parser.add_argument("--seed", type=int, default=42,
-                    help="Random seed (used with --benchmark)")
+                    help="Random seed for reproducibility")
 parser.add_argument("--radiate-interval", type=int, default=50)
 parser.add_argument("--cull-max-pop", type=int, default=100)
 args = parser.parse_args()
@@ -69,32 +69,10 @@ backend_map = {"cpu": ti.cpu, "metal": ti.metal,
 ti.init(backend_map[args.backend])
 DEVICE = torch.device(args.device)
 
-from coralai.substrate import Substrate
-from coralai.evolver import SpaceEvolver, apply_weights_and_biases
+from coralai.evolver import apply_weights_and_biases
 from coralai.visualization import Visualization
 
-# ---------------------------------------------------------------------------
-# Channel / kernel config (the experiment definition)
-# ---------------------------------------------------------------------------
-CHANNELS = {
-    "energy": ti.f32,
-    "infra": ti.f32,
-    "acts": ti.types.struct(
-        invest=ti.f32,
-        liquidate=ti.f32,
-        explore=ti.types.vector(n=4, dtype=ti.f32),  # no, fwd, left, right
-    ),
-    "com": ti.types.struct(a=ti.f32, b=ti.f32, c=ti.f32, d=ti.f32),
-    "rot": ti.f32,
-    "genome": ti.f32,
-}
-KERNEL = [[0, 0], [1, 0], [1, 1], [0, 1], [-1, 1],
-          [-1, 0], [-1, -1], [0, -1], [1, -1]]
-DIR_ORDER = [0, -1, 1]
-SENSE_CHS = ["energy", "infra", "com"]
-ACT_CHS = ["acts", "com"]
-
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "neat.config")
+from experiment import EXPERIMENT as exp
 
 # ---------------------------------------------------------------------------
 # GUI overlay (only used when not --no-gui)
@@ -115,8 +93,6 @@ class CoralVis(Visualization):
         # -- Panel 1: Display — y=0.01..0.46 ---------------------------------
         with self.gui.sub_window("Display", px, 0.01, pw, 0.46) as sw:
             self._draw_norm_controls(sw)
-            # Presets: set chinds AND view_mode together so buttons always
-            # do what their label says, regardless of slider state.
             if sw.button("E | I | Rot"):
                 self.chinds[0] = int(inds.energy)
                 self.chinds[1] = int(inds.infra)
@@ -136,8 +112,6 @@ class CoralVis(Visualization):
             if sw.button("Genome only"):
                 self.chinds[0] = int(inds.genome)
                 self.view_mode = 1
-            # Fine-grained sliders: change which channel is in each slot.
-            # view_mode is unchanged; press a preset to re-sync if needed.
             self.chinds[0] = sw.slider_int(
                 f"R: {self.substrate.index_to_chname(int(self.chinds[0]))}",
                 int(self.chinds[0]), 0, n_chs - 1)
@@ -152,7 +126,6 @@ class CoralVis(Visualization):
         # -- Panel 2: Stats — y=0.47..0.99 -----------------------------------
         with self.gui.sub_window("Stats", px, 0.47, pw, 0.52) as sw:
             pos = self.window.get_cursor_pos()
-            # Remap cursor x from full-window fraction to simulation fraction
             sim_frac = self.sim_w / self.image.shape[0]
             cx = int((pos[0] / sim_frac) * self.w) % self.w
             cy = int(pos[1] * self.h) % self.h
@@ -195,21 +168,20 @@ def sync():
 def main():
     shape = (args.shape, args.shape)
 
-    substrate = Substrate(shape, torch.float32, DEVICE, CHANNELS)
-    substrate.malloc()
+    substrate = exp.make_substrate(shape, DEVICE)
 
     if args.benchmark:
-        # Fill all cells to benchmark worst-case (maximum computation)
         inds = substrate.ti_indices[None]
         substrate.mem[0, inds.energy] = torch.rand(shape, device=DEVICE)
-        substrate.mem[0, inds.infra] = torch.rand(shape, device=DEVICE)
+        substrate.mem[0, inds.infra]  = torch.rand(shape, device=DEVICE)
+        env = exp.make_env("flat")
+    else:
+        env = exp.make_env("flat")
 
-    evolver = SpaceEvolver(CONFIG_PATH, substrate, KERNEL, DIR_ORDER,
-                           SENSE_CHS, ACT_CHS)
+    evolver = exp.make_evolver(substrate)
 
     headless = args.no_gui or args.benchmark
-    vis = None if headless else CoralVis(substrate, evolver,
-                                         ["energy", "infra", "rot"])
+    vis = None if headless else exp.make_vis(substrate, evolver)
 
     inds = substrate.ti_indices[None]
     timings = defaultdict(float)
@@ -225,68 +197,37 @@ def main():
           f"{'benchmark' if args.benchmark else 'profile' if args.profile else 'run'}")
     print("-" * 60)
 
-    from physics import activate_outputs, invest_liquidate, explore_physics, energy_physics
-    from evolution import kill_random_chunk, apply_radiation_mutation, get_energy_offset
+    from evolution import apply_radiation_mutation
 
     for step in range(max_steps):
         t_step = time.perf_counter()
 
         sync(); t0 = time.perf_counter()
         cw, cb = evolver.get_combined_weights()
-        sync(); timings["0_get_weights"] += time.perf_counter() - t0
-
-        sync(); t0 = time.perf_counter()
         out_mem = evolver._get_scratch("out_mem", substrate.mem[0, evolver.act_chinds])
         apply_weights_and_biases(substrate.mem, out_mem, evolver.sense_chinds,
                                  cw, cb, evolver.dir_kernel, evolver.dir_order,
                                  substrate.ti_indices)
         substrate.mem[0, evolver.act_chinds] = out_mem
-        sync(); timings["1_apply_weights"] += time.perf_counter() - t0
+        sync(); timings["0_nn_forward"] += time.perf_counter() - t0
 
         sync(); t0 = time.perf_counter()
-        activate_outputs(substrate)
-        sync(); timings["2_activate_out"] += time.perf_counter() - t0
+        exp.run_physics(substrate, evolver)
+        sync(); timings["1_physics"] += time.perf_counter() - t0
 
         sync(); t0 = time.perf_counter()
-        invest_liquidate(substrate)
-        sync(); timings["3_invest_liq"] += time.perf_counter() - t0
-
-        sync(); t0 = time.perf_counter()
-        explore_physics(substrate, evolver.kernel, evolver.dir_order)
-        sync(); timings["4_explore"] += time.perf_counter() - t0
-
-        sync(); t0 = time.perf_counter()
-        energy_physics(substrate, evolver.kernel, max_infra=10, max_energy=1.5)
-        sync(); timings["5_energy"] += time.perf_counter() - t0
-
-        sync(); t0 = time.perf_counter()
-        alive = (substrate.mem[0, inds.infra] + substrate.mem[0, inds.energy]) > 0.05
-        substrate.mem[0, inds.genome].masked_fill_(~alive, -1)
-        sync(); timings["6_death"] += time.perf_counter() - t0
-
-        sync(); t0 = time.perf_counter()
-        evolver.energy_offset = get_energy_offset(step)
-        evolver.ages = [a + 1 for a in evolver.ages]
-        offset = evolver.energy_offset
-        substrate.mem[0, inds.energy].add_(
-            torch.randn_like(substrate.mem[0, inds.energy]).add_(offset).mul_(0.1))
-        substrate.mem[0, inds.infra].add_(
-            torch.randn_like(substrate.mem[0, inds.infra]).add_(offset).mul_(0.1))
-        substrate.mem[0, inds.energy].clamp_(0.01, 100)
-        substrate.mem[0, inds.infra].clamp_(0.01, 100)
-        if step % 50 == 0:
-            kill_random_chunk(evolver, 5)
-        sync(); timings["7_step_rest"] += time.perf_counter() - t0
+        exp.run_evolution(substrate, evolver, step)
+        sync(); timings["2_evolution"] += time.perf_counter() - t0
 
         if vis:
             sync(); t0 = time.perf_counter()
             vis.update()
-            sync(); timings["8_render"] += time.perf_counter() - t0
+            sync(); timings["3_render"] += time.perf_counter() - t0
 
         if step % args.radiate_interval == 0 and step > 0:
             sync(); t0 = time.perf_counter()
             apply_radiation_mutation(evolver, 5)
-            sync(); timings["9_radiation"] += time.perf_counter() - t0
+            sync(); timings["4_radiation"] += time.perf_counter() - t0
 
         if (len(evolver.genomes) > args.cull_max_pop
                 and (step - evolver.time_last_cull) > 50):
@@ -326,7 +267,7 @@ def main():
 
     if args.profile or args.benchmark:
         total_p = sum(timings.values())
-        print("\n  Per-function breakdown:")
+        print("\n  Per-category breakdown:")
         for name, t in sorted(timings.items()):
             pct = 100 * t / total_p if total_p > 0 else 0
             print(f"    {name:25s}  {1000*t/n:6.2f}ms/step  {pct:5.1f}%")
