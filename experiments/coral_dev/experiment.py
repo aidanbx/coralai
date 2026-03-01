@@ -20,6 +20,7 @@ import taichi as ti
 import torch
 
 from coralai.experiment import Experiment
+from coralai.visualization import Visualization
 
 # Captured at module load time so make_evolver finds the right neat.config
 # whether this file is run in-place or loaded from a snapshot.
@@ -49,6 +50,83 @@ ACT_CHS   = ["acts", "com"]
 
 
 # ---------------------------------------------------------------------------
+# CoralVis — experiment-specific GUI overlay
+# ---------------------------------------------------------------------------
+
+class CoralVis(Visualization):
+    def __init__(self, substrate, evolver, vis_chs):
+        super().__init__(substrate, vis_chs, panel_width=300)
+        self.evolver = evolver
+        self.genome_stats = []
+        self.fps_history = []
+
+    def render_opt_window(self):
+        inds = self.substrate.ti_indices[None]
+        px = self.panel_x
+        pw = self.panel_wfrac
+        n_chs = self.substrate.mem.shape[1]
+
+        with self.gui.sub_window("Display", px, 0.01, pw, 0.46) as sw:
+            self._draw_norm_controls(sw)
+            if sw.button("E | I | Rot"):
+                self.chinds[0] = int(inds.energy)
+                self.chinds[1] = int(inds.infra)
+                self.chinds[2] = int(inds.rot)
+                self.view_mode = 0
+            if sw.button("Genome | E | I"):
+                self.chinds[0] = int(inds.genome)
+                self.chinds[1] = int(inds.energy)
+                self.chinds[2] = int(inds.infra)
+                self.view_mode = 0
+            if sw.button("Energy only"):
+                self.chinds[0] = int(inds.energy)
+                self.view_mode = 1
+            if sw.button("Infra only"):
+                self.chinds[1] = int(inds.infra)
+                self.view_mode = 2
+            if sw.button("Genome only"):
+                self.chinds[0] = int(inds.genome)
+                self.view_mode = 1
+            self.chinds[0] = sw.slider_int(
+                f"R: {self.substrate.index_to_chname(int(self.chinds[0]))}",
+                int(self.chinds[0]), 0, n_chs - 1)
+            self.chinds[1] = sw.slider_int(
+                f"G: {self.substrate.index_to_chname(int(self.chinds[1]))}",
+                int(self.chinds[1]), 0, n_chs - 1)
+            self.chinds[2] = sw.slider_int(
+                f"B: {self.substrate.index_to_chname(int(self.chinds[2]))}",
+                int(self.chinds[2]), 0, n_chs - 1)
+            self.paused = sw.checkbox("Pause", self.paused)
+
+        with self.gui.sub_window("Stats", px, 0.47, pw, 0.52) as sw:
+            pos = self.window.get_cursor_pos()
+            sim_frac = self.sim_w / self.image.shape[0]
+            cx = int((pos[0] / sim_frac) * self.w) % self.w
+            cy = int(pos[1] * self.h) % self.h
+            sw.text(
+                f"GENOME: {self.substrate.mem[0, inds.genome, cx, cy]:.0f}\n"
+                f"Energy: {self.substrate.mem[0, inds.energy, cx, cy]:.2f}\n"
+                f"Infra:  {self.substrate.mem[0, inds.infra, cx, cy]:.2f}")
+            sw.text(f"Step: {self.evolver.timestep}")
+            tot_e = torch.sum(self.substrate.mem[0, inds.energy])
+            tot_i = torch.sum(self.substrate.mem[0, inds.infra])
+            sw.text(f"Total E+I: {tot_e + tot_i:.1f}")
+            sw.text(f"Energy%: {100 * tot_e / (tot_e + tot_i):.1f}%")
+            sw.text(f"E offset: {self.evolver.energy_offset:.3f}")
+            sw.text(f"Genomes: {len(self.evolver.genomes)}")
+            if self.fps_history:
+                sw.text(f"FPS: {self.fps_history[-1]:.1f}")
+            if self.evolver.timestep % 20 == 0:
+                self.genome_stats = []
+                for i in range(len(self.evolver.genomes)):
+                    n = self.substrate.mem[0, inds.genome].eq(i).sum().item()
+                    self.genome_stats.append((i, n, self.evolver.ages[i]))
+                self.genome_stats.sort(key=lambda x: x[1], reverse=True)
+            for i, n_cells, age in self.genome_stats[:8]:
+                sw.text(f"  G{i}: {n_cells:.0f}c  {age}t")
+
+
+# ---------------------------------------------------------------------------
 # Experiment class
 # ---------------------------------------------------------------------------
 
@@ -66,11 +144,6 @@ class CoralDevExperiment(Experiment):
         return make_env(env_name, param)
 
     def make_vis(self, substrate, evolver):
-        # CoralVis is defined in run.py so it has access to evolver state.
-        # Deferred import works because run.py is fully loaded before make_vis
-        # is called.  The generic replay (coralai/replay.py) never calls
-        # make_vis — it uses its own GenericReplayVis instead.
-        from run import CoralVis
         return CoralVis(substrate, evolver, ["energy", "infra", "rot"])
 
     def run_physics(self, substrate, evolver):
