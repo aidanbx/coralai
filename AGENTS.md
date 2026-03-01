@@ -34,12 +34,12 @@ logs/
 
 CoralAI is a Python research framework for simulating emergent ecosystems of evolved Neural Cellular Automata (NCA). It uses PyTorch for tensor operations, Taichi Lang for GPU-parallel kernels (Mac Metal, CUDA, or CPU), and NEAT-Python for neuroevolution. It was developed as a Master's Thesis (2024), building on EINCASM (ALIFE 2023).
 
-See `logs/2026-02-26 Thu/2026-02-26 Thu 20.21 coralai deep dive.md` for a full architectural write-up.
+**Active experiment**: `experiments/coral_dev/` — energy/infra economy with directional colonization.
+**Active entry point**: `python experiments/coral_dev/run.py`
+**Active evolver**: `coralai/evolver.py` (SpaceEvolver — continuous spatial NEAT, no explicit generations).
+**Replay**: `python -m coralai.replay --run-dir runs/coral_dev_TIMESTAMP`
 
-**Active runner**: `coral_runner_space.py` - continuous spatial NEAT, no explicit generations.
-**Active instance**: `coralai/instances/coral/` - energy/infra economy with directional colonization.
-**Active physics**: `coralai/instances/coral/coral_physics.py`.
-**Active evolver**: `coralai/evolution/space_evolver.py`.
+See `logs/2026-02-26 Thu/` for architecture write-ups and `logs/2026-02-28 Sat/` for the current refactor notes.
 
 ---
 
@@ -84,45 +84,40 @@ make clean          # remove runs/, history/, __pycache__, etc.
 
 ## Running
 
-### GUI runners (Mac only — requires Metal)
+### GUI (Mac Metal)
 ```bash
-python coral_runner_space.py    # full coral ecosystem, 400×400, Mac Metal
-python minimal_runner.py        # single-channel NCA, Mac Metal
-python nca_runner.py            # RGB NCA, Mac Metal
+python experiments/coral_dev/run.py
+python experiments/coral_dev/run.py --env hole --env-param 0.35
+python experiments/coral_dev/run.py --env stripes --env-param 6
 ```
-These use Taichi GGUI and are hardcoded to `ti.metal` + `torch.device("mps")`. Not portable.
 
-### Headless REPL (cross-platform)
+### Headless
 ```bash
-python headless_repl.py --experiment minimal --shape 64
-python headless_repl.py --experiment nca     --shape 48
-python headless_repl.py --experiment coral   --shape 16
+python experiments/coral_dev/run.py --no-gui --steps 1000
+python experiments/coral_dev/run.py --no-gui --steps 1000 --profile
+python experiments/coral_dev/run.py --benchmark --steps 200 --shape 400
+python experiments/coral_dev/run.py --backend cpu --device cpu --no-gui --steps 100
 ```
 
-Options:
-- `--shape N` — grid side length (N×N)
-- `--steps-per-frame N` — simulation steps between rendered frames (default 1)
-- `--max-frames N` — cap on saved frames (default 2000)
-- `--auto N` — run N steps non-interactively, save video, exit
-- `--fps N` — output video frame rate (default 30)
+### Checkpointing and resume
+```bash
+# Dense checkpoints for scrubbing in replay:
+python experiments/coral_dev/run.py --no-gui --steps 1000 --checkpoint-interval 100
 
-REPL commands (interactive mode):
-```
-step [N]           advance N steps (default 10), prints steps/s
-mutate [strength]  perturb organism weights
-status             print per-channel statistics (mean/std/min/max/sum)
-channels R G B     set which channels map to RGB display (by name or index)
-paint X Y VAL CH   add VAL to substrate.mem[0, CH, X, Y]
-clear              zero all substrate memory
-save_frame         save current frame as PNG to runs/<run>/frames/
-snapshot           save substrate.mem tensor to runs/<run>/substrate_step<N>.pt
-quit / exit        compile video, write log.json, exit
+# Resume from a checkpoint (--steps = additional steps from that point):
+python experiments/coral_dev/run.py --resume-from runs/coral_dev_TIMESTAMP/checkpoint_0000500
+
+# Replay with GUI — Reset/Prev/Next buttons to navigate checkpoints:
+python -m coralai.replay --run-dir runs/coral_dev_TIMESTAMP
+python -m coralai.replay --run-dir runs/coral_dev_TIMESTAMP --step 500
 ```
 
-Output is written to `runs/<experiment>_<timestamp>/`:
-- `simulation.mp4` — compiled video
-- `log.json` — per-step stats and event log
-- `frames/` — individual PNG frames
+Run output (`runs/coral_dev_TIMESTAMP/`):
+- `meta.json` — shape, seed, env, start_step, timestamps
+- `initial_state.pt` — substrate at step 0
+- `step_log.csv` — per-step energy, infra, genome counts, FPS
+- `snapshot/` — frozen copy of experiment source (replay uses this)
+- `checkpoint_NNNNNNN/` — substrate.pt + population.pkl + meta.json
 
 ---
 
@@ -160,31 +155,29 @@ Grid size scales as O(W×H×C) where C is total channel count. For coral: C=15 c
 - `coralai/instances/coral/coral_evolver.py` — empty stub, imports a deleted `simulation.evolver` module
 - `coralai/instances/coral/dumb_test_org.py` — imports deleted `dynamics.Organism`
 - `coralai/instances/eincasm/eincasm.py` — references `World`, `dynamics.pcg`, `dynamics.ein_physics`, all deleted
-- `coral_runner.py` / `coral_runner_old.py` — legacy, use `coral_runner_space.py` instead
-
-### Partially implemented
-- `SpaceEvolver.save_checkpoint()` — stub (`pass`), no checkpointing
-- `SpaceEvolver.report_if_necessary()` — body exists but call is commented out in `run()`
-- The genome culling strategy (`reduce_population_to_threshold`) kills lowest-cell-count genomes when count >100 — bad for biodiversity, a memory management workaround
 
 ### Known design issues
-- `activate_outputs` applies `softmax(dim=0)` on invest/liquidate, forcing `invest + liquidate = 1` per cell; cells can never "do nothing," wastes energy at equilibrium. See `../logs/2026-02-26 Thu/2026-02-26 Thu invest liquidate softmax analysis.md`.
+- `activate_outputs` in coral_dev uses `tanh` for trade signals (replaces the old softmax invest/liquidate); cells can still "waste" signal. See `logs/2026-02-28 Sat/` for design rationale.
 - `explore_physics` uses `argmax` on direction activations — discards magnitude, forces single-direction expansion per step
 - No spatially-structured energy sources — energy injection is spatially homogeneous (uniform noise + sinusoidal offset)
 - `LinearNet` in SpaceEvolver ignores NEAT hidden nodes — the network is always purely linear regardless of `num_hidden` in the config
 
 ### Taichi CPU gotcha
-On the CPU backend, any cell with `genome = -1` causes out-of-bounds array access in `apply_weights_and_biases` (negative index into the weight array). The coral runner seeds genomes correctly at init, but mutations can momentarily create unowned cells. The GPU backends handle negative indices differently (wrap/clamp). Always initialize genome values to valid keys (≥ 0) when using CPU.
+On the CPU backend, any cell with `genome = -1` causes out-of-bounds array access in `apply_weights_and_biases` (negative index into the weight array). The GPU backends handle negative indices differently (wrap/clamp). Always initialize genome values to valid keys (≥ 0) when using CPU.
+
+### Replay non-determinism
+Resuming from a checkpoint does not produce bitwise-identical results on MPS or CPU. Two sources: (1) Taichi atomic race conditions in `explore_physics` — thread scheduling is non-deterministic; (2) MPS parallel float reduction ordering. All RNG states (torch/MPS/numpy/python) are correctly saved and restored — the divergence is in kernel execution order. CPU is also non-deterministic for the same reason. Checkpoints are useful for exploring the state space but not for exact reproduction.
 
 ---
 
 ## Tests and Lint
 
 ```bash
+python tests/smoke_test.py   # 10 smoke tests: syntax, imports, run, checkpoint, replay
 make test    # runs test_cppn.py and test_multi_env_eval.py from PyTorch-NEAT
 make lint    # flake8 E9/F63/F7/F82 (critical errors only)
 ```
 
+- `tests/smoke_test.py` — 10 tests covering: syntax (12 files), replay_utils importable without Taichi, StartEnvironment base class, basic headless run + file structure, meta.json keys, snapshot contents, hole env persist, checkpointing, load_experiment_from_snapshot, replay one step without NaN. All pass.
 - 5/6 PyTorch-NEAT tests pass on CPU-only (`test_cppn_unconnected` fails — hardcoded CUDA device in test, not a real issue)
-- No test suite for `coralai` itself; `test.py` at root is a scratch script
 - `make clean` removes `runs/`, `history/`, all `__pycache__`
