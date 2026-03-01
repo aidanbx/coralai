@@ -253,8 +253,9 @@ class SpaceEvolver():
 
         Files written:
           substrate.pt     — substrate.mem tensor (CPU, device-agnostic)
-          population.pkl   — genomes, ages, weights, biases, timestep
-          meta.json        — step, timestamp, git hash, grid shape
+          population.pkl   — genomes, ages, weights, biases, timestep,
+                             energy_offset, time_last_cull, rng_state
+          meta.json        — step, timestamp, git hash (advisory), grid shape
         """
         import json
         import pickle
@@ -266,12 +267,27 @@ class SpaceEvolver():
         torch.save(self.substrate.mem.cpu(),
                    os.path.join(ckpt_dir, "substrate.pt"))
 
+        # Capture all three RNG states so the run is reproducible from here
+        rng_state = {
+            "torch":  torch.get_rng_state(),
+            "numpy":  np.random.get_state(),
+            "python": random.getstate(),
+        }
+        if hasattr(torch, "backends") and hasattr(torch.backends, "mps") \
+                and torch.backends.mps.is_available():
+            rng_state["mps"] = torch.mps.get_rng_state()
+        elif torch.cuda.is_available():
+            rng_state["cuda"] = torch.cuda.get_rng_state()
+
         pop_data = {
-            "genomes":  self.genomes,
-            "ages":     self.ages,
-            "weights":  [w.cpu() for w in self.combined_weights],
-            "biases":   [b.cpu() for b in self.combined_biases],
-            "timestep": self.timestep,
+            "genomes":        self.genomes,
+            "ages":           self.ages,
+            "weights":        [w.cpu() for w in self.combined_weights],
+            "biases":         [b.cpu() for b in self.combined_biases],
+            "timestep":       self.timestep,
+            "energy_offset":  self.energy_offset,
+            "time_last_cull": self.time_last_cull,
+            "rng_state":      rng_state,
         }
         with open(os.path.join(ckpt_dir, "population.pkl"), "wb") as f:
             pickle.dump(pop_data, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -294,6 +310,52 @@ class SpaceEvolver():
             json.dump(meta, f, indent=2)
 
         print(f"  [checkpoint] step {step:,} → {ckpt_dir}")
+
+    def load_checkpoint(self, ckpt_dir):
+        """Restore substrate + evolver state from a checkpoint directory.
+
+        After calling this the step loop can resume with the same RNG state
+        as when the checkpoint was saved, producing a reproducible trajectory.
+        """
+        import pickle as _pickle
+
+        # 1. Restore substrate memory
+        saved_mem = torch.load(
+            os.path.join(ckpt_dir, "substrate.pt"), map_location="cpu"
+        )
+        self.substrate.mem.copy_(saved_mem.to(self.substrate.torch_device))
+
+        # 2. Restore population and scalar evolver state
+        with open(os.path.join(ckpt_dir, "population.pkl"), "rb") as f:
+            pop = _pickle.load(f)
+
+        self.genomes         = pop["genomes"]
+        self.ages            = pop["ages"]
+        self.combined_weights = [w.to(self.substrate.torch_device) for w in pop["weights"]]
+        self.combined_biases  = [b.to(self.substrate.torch_device) for b in pop["biases"]]
+        self.timestep        = pop["timestep"]
+        self.energy_offset   = pop.get("energy_offset", 0.0)
+        self.time_last_cull  = pop.get("time_last_cull", 0)
+
+        # Invalidate weight cache so next get_combined_weights() rebuilds it
+        self._weights_dirty = True
+        self._cached_cw = None
+        self._cached_cb = None
+
+        # 3. Restore RNG state (graceful no-op if checkpoint predates this feature)
+        rng = pop.get("rng_state", {})
+        if "torch"  in rng:
+            torch.set_rng_state(rng["torch"])
+        if "numpy"  in rng:
+            np.random.set_state(rng["numpy"])
+        if "python" in rng:
+            random.setstate(rng["python"])
+        if "mps" in rng and hasattr(torch, "mps"):
+            torch.mps.set_rng_state(rng["mps"])
+        if "cuda" in rng and torch.cuda.is_available():
+            torch.cuda.set_rng_state(rng["cuda"])
+
+        print(f"  [loaded] step {self.timestep:,} ← {ckpt_dir}")
     
     def report_if_necessary(self, fitness_function, n=None):
         for i in range(len(self.genomes)):
@@ -386,47 +448,6 @@ class SpaceEvolver():
         for i in range(x-radius, x+radius):
             for j in range(y-radius, y+radius):
                 self.substrate.mem[0, inds.genome, i%self.substrate.w, j%self.substrate.h] = genome_key
-
-
-    def kill_random_chunk(self, radius):
-        x = np.random.randint(0, self.substrate.w)
-        y = np.random.randint(0, self.substrate.h)
-        self.set_chunk(-1, x, y, radius)
-
-
-    def get_energy_offset(self, timestep, repeat_steps=50, amplitude=1, positive_scale=1, negative_scale=1):
-        frequency = (2 * np.pi) / repeat_steps
-        value = amplitude * np.sin(frequency * timestep)
-        if value > 0:
-            return value * positive_scale
-        else:
-            return value * negative_scale
-
-    
-    def apply_radiation_mutation(self, n_spots, spot_live_radius=2, spot_dead_radius=4):
-        inds = self.substrate.ti_indices[None]
-        xs = torch.randint(0, self.substrate.w, (n_spots,))
-        ys = torch.randint(0, self.substrate.h, (n_spots,))
-        
-        for i in range(n_spots):
-            genome_key = int(self.substrate.mem[0, inds.genome, xs[i], ys[i]].item())
-            rand_genome_key = torch.randint(0, len(self.genomes), (1,))
-            self.set_chunk(-1, xs[i], ys[i], spot_dead_radius)
-            if genome_key < 0:
-                self.set_chunk(rand_genome_key, xs[i], ys[i], spot_live_radius)
-            else:
-                if random.random() < 0.5:
-                    new_genome = copy.deepcopy(self.genomes[genome_key])
-                    new_genome.mutate(self.neat_config.genome_config)
-                    new_genome_key = self.add_organism_get_key(new_genome)
-                    self.set_chunk(new_genome_key, xs[i], ys[i], spot_live_radius)
-                else: 
-                    new_genome = neat.DefaultGenome(str(len(self.genomes)))
-                    self.genomes[genome_key].fitness = 0.0
-                    self.genomes[rand_genome_key].fitness = 0.0
-                    new_genome.configure_crossover(self.genomes[genome_key], self.genomes[rand_genome_key], self.neat_config)
-                    new_genome_key = self.add_organism_get_key(new_genome)
-                    self.set_chunk(new_genome_key, xs[i], ys[i], spot_live_radius)
 
 
     def create_torch_net(self, genome):

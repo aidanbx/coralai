@@ -24,6 +24,11 @@ Usage:
     # Smaller grid for quick experimentation:
     python experiments/coral/run.py --shape 200 --steps 10000
 
+    # Non-homogeneous environments (hole in center, stripes, etc.):
+    python experiments/coral_dev/run.py --env hole
+    python experiments/coral_dev/run.py --env hole --env-param 0.4
+    python experiments/coral_dev/run.py --env stripes --env-param 6
+
     # CPU-only (headless Linux, no Metal):
     python experiments/coral/run.py --backend cpu --device cpu --no-gui --steps 100
 """
@@ -64,7 +69,22 @@ parser.add_argument("--checkpoint-interval", type=int, default=1000,
                     help="Steps between checkpoints (0 = disable)")
 parser.add_argument("--log-interval", type=int, default=10,
                     help="Steps between CSV log rows")
+parser.add_argument("--env", type=str, default="flat",
+                    choices=["flat", "hole", "ring", "stripes", "corners"],
+                    help="Start environment: flat (homogeneous), hole (center barren), ring (same), stripes, corners")
+parser.add_argument("--env-param", type=float, default=None,
+                    help="Env-specific param (e.g. hole radius fraction 0.35, stripes count 5)")
+parser.add_argument("--env-persist", action="store_true",
+                    help="If set, re-apply env mask every step (hole stays barren). Default: only start with shape; blank areas get no global noise and life can grow in.")
 args = parser.parse_args()
+
+# Seed all RNGs unconditionally so every run is reproducible from a checkpoint.
+# NEAT mutations also use Python's random module → all stochastic drivers covered.
+import random
+import numpy as np
+random.seed(args.seed)
+np.random.seed(args.seed)
+torch.manual_seed(args.seed)
 
 backend_map = {"cpu": ti.cpu, "metal": ti.metal,
                "cuda": ti.cuda, "vulkan": ti.vulkan}
@@ -192,12 +212,6 @@ def sync():
 def main():
     shape = (args.shape, args.shape)
 
-    if args.benchmark:
-        import random, numpy as np
-        random.seed(args.seed)
-        np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
-
     substrate = Substrate(shape, torch.float32, DEVICE, CHANNELS)
     substrate.malloc()
 
@@ -206,6 +220,14 @@ def main():
         inds = substrate.ti_indices[None]
         substrate.mem[0, inds.energy] = torch.rand(shape, device=DEVICE)
         substrate.mem[0, inds.infra] = torch.rand(shape, device=DEVICE)
+        env_mask = None
+    else:
+        from env import make_env_mask, seed_initial, apply_env, zero_blank
+        if args.env == "flat":
+            env_mask = None
+        else:
+            env_mask = make_env_mask(shape, args.env, DEVICE, args.env_param)
+            seed_initial(substrate, env_mask)
 
     evolver = SpaceEvolver(CONFIG_PATH, substrate, KERNEL, DIR_ORDER,
                            SENSE_CHS, ACT_CHS)
@@ -231,6 +253,16 @@ def main():
         repo_root, "runs",
         f"coral_dev_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
     os.makedirs(run_dir, exist_ok=True)
+
+    # Snapshot the experiment folder into the run dir so replay always uses
+    # the exact physics + evolution code that generated this run.
+    import shutil
+    shutil.copytree(
+        os.path.dirname(os.path.abspath(__file__)),
+        os.path.join(run_dir, "snapshot"),
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
+
     log_path = os.path.join(run_dir, "step_log.csv")
     log_file = open(log_path, "w", newline="")
     log_writer = csv.writer(log_file)
@@ -242,11 +274,12 @@ def main():
     # ------------------------------------------------------------------------
 
     print(f"Coral-dev | {shape[0]}x{shape[1]} | {args.backend}/{args.device} | "
-          f"GUI={'OFF' if headless else 'ON'} | "
+          f"env={args.env} persist={args.env_persist} | GUI={'OFF' if headless else 'ON'} | "
           f"{'benchmark' if args.benchmark else 'profile' if args.profile else 'run'}")
     print("-" * 60)
 
     from physics import activate_outputs, invest_liquidate, explore_physics, energy_physics
+    from evolution import kill_random_chunk, apply_radiation_mutation, get_energy_offset
 
     for step in range(max_steps):
         t_step = time.perf_counter()
@@ -285,17 +318,24 @@ def main():
         sync(); timings["6_death"] += time.perf_counter() - t0
 
         sync(); t0 = time.perf_counter()
-        evolver.energy_offset = evolver.get_energy_offset(step)
+        evolver.energy_offset = get_energy_offset(step)
         evolver.ages = [a + 1 for a in evolver.ages]
         offset = evolver.energy_offset
-        substrate.mem[0, inds.energy].add_(
-            torch.randn_like(substrate.mem[0, inds.energy]).add_(offset).mul_(0.1))
-        substrate.mem[0, inds.infra].add_(
-            torch.randn_like(substrate.mem[0, inds.infra]).add_(offset).mul_(0.1))
+        noise_e = torch.randn_like(substrate.mem[0, inds.energy]).add_(offset).mul_(0.1)
+        noise_i = torch.randn_like(substrate.mem[0, inds.infra]).add_(offset).mul_(0.1)
+        if env_mask is not None and not args.env_persist:
+            noise_e = noise_e * env_mask
+            noise_i = noise_i * env_mask
+        substrate.mem[0, inds.energy].add_(noise_e)
+        substrate.mem[0, inds.infra].add_(noise_i)
         substrate.mem[0, inds.energy].clamp_(0.01, 100)
         substrate.mem[0, inds.infra].clamp_(0.01, 100)
+        if env_mask is not None and not args.env_persist:
+            zero_blank(substrate, env_mask)
         if step % 50 == 0:
-            evolver.kill_random_chunk(5)
+            kill_random_chunk(evolver, 5)
+        if env_mask is not None and args.env_persist:
+            apply_env(substrate, env_mask)
         sync(); timings["7_step_rest"] += time.perf_counter() - t0
 
         if vis:
@@ -305,7 +345,7 @@ def main():
 
         if step % args.radiate_interval == 0 and step > 0:
             sync(); t0 = time.perf_counter()
-            evolver.apply_radiation_mutation(5)
+            apply_radiation_mutation(evolver, 5)
             sync(); timings["9_radiation"] += time.perf_counter() - t0
 
         if (len(evolver.genomes) > args.cull_max_pop

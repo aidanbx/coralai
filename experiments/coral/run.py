@@ -57,6 +57,13 @@ parser.add_argument("--radiate-interval", type=int, default=50)
 parser.add_argument("--cull-max-pop", type=int, default=100)
 args = parser.parse_args()
 
+# Seed all RNGs unconditionally so every run is reproducible from a checkpoint.
+import random
+import numpy as np
+random.seed(args.seed)
+np.random.seed(args.seed)
+torch.manual_seed(args.seed)
+
 backend_map = {"cpu": ti.cpu, "metal": ti.metal,
                "cuda": ti.cuda, "vulkan": ti.vulkan}
 ti.init(backend_map[args.backend])
@@ -188,12 +195,6 @@ def sync():
 def main():
     shape = (args.shape, args.shape)
 
-    if args.benchmark:
-        import random, numpy as np
-        random.seed(args.seed)
-        np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
-
     substrate = Substrate(shape, torch.float32, DEVICE, CHANNELS)
     substrate.malloc()
 
@@ -225,6 +226,7 @@ def main():
     print("-" * 60)
 
     from physics import activate_outputs, invest_liquidate, explore_physics, energy_physics
+    from evolution import kill_random_chunk, apply_radiation_mutation, get_energy_offset
 
     for step in range(max_steps):
         t_step = time.perf_counter()
@@ -263,7 +265,7 @@ def main():
         sync(); timings["6_death"] += time.perf_counter() - t0
 
         sync(); t0 = time.perf_counter()
-        evolver.energy_offset = evolver.get_energy_offset(step)
+        evolver.energy_offset = get_energy_offset(step)
         evolver.ages = [a + 1 for a in evolver.ages]
         offset = evolver.energy_offset
         substrate.mem[0, inds.energy].add_(
@@ -273,7 +275,7 @@ def main():
         substrate.mem[0, inds.energy].clamp_(0.01, 100)
         substrate.mem[0, inds.infra].clamp_(0.01, 100)
         if step % 50 == 0:
-            evolver.kill_random_chunk(5)
+            kill_random_chunk(evolver, 5)
         sync(); timings["7_step_rest"] += time.perf_counter() - t0
 
         if vis:
@@ -283,7 +285,7 @@ def main():
 
         if step % args.radiate_interval == 0 and step > 0:
             sync(); t0 = time.perf_counter()
-            evolver.apply_radiation_mutation(5)
+            apply_radiation_mutation(evolver, 5)
             sync(); timings["9_radiation"] += time.perf_counter() - t0
 
         if (len(evolver.genomes) > args.cull_max_pop
