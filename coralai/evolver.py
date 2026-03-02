@@ -25,30 +25,37 @@ def apply_weights_and_biases(mem: ti.types.ndarray(), out_mem: ti.types.ndarray(
                              sense_chinds: ti.types.ndarray(),
                              combined_weights: ti.types.ndarray(), combined_biases: ti.types.ndarray(),
                              dir_kernel: ti.types.ndarray(), dir_order: ti.types.ndarray(),
-                             ti_inds: ti.template()):
+                             ti_inds: ti.template(),
+                             key_to_local: ti.types.ndarray()):
+    """Forward pass: each cell looks up its genome key → local weight row."""
     inds = ti_inds[None]
     for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
-        genome_key = int(mem[0, inds.genome, i, j])
-        if genome_key < 0 or genome_key >= combined_weights.shape[0]:
+        key = int(mem[0, inds.genome, i, j])
+        if key < 0 or key >= key_to_local.shape[0]:
             for act_k in range(out_mem.shape[0]):
                 out_mem[act_k, i, j] = 0.0
         else:
-            rot = int(mem[0, inds.rot, i, j])
-            n_dirs = dir_kernel.shape[0]
-            for act_k in range(out_mem.shape[0]):
-                val = 0.0
-                for sense_ch_n in ti.ndrange(sense_chinds.shape[0]):
-                    start_weight_ind = sense_ch_n * (n_dirs + 1)
-                    val += (mem[0, sense_chinds[sense_ch_n], i, j] *
-                            combined_weights[genome_key, 0, act_k, start_weight_ind])
-                    for offset_m in ti.ndrange(n_dirs):
-                        ind = (rot + int(dir_order[offset_m]) + n_dirs) % n_dirs
-                        neigh_x = (i + dir_kernel[ind, 0]) % mem.shape[2]
-                        neigh_y = (j + dir_kernel[ind, 1]) % mem.shape[3]
-                        weight_ind = start_weight_ind + offset_m
-                        val += (mem[0, sense_chinds[sense_ch_n], neigh_x, neigh_y] *
-                                combined_weights[genome_key, 0, act_k, weight_ind])
-                out_mem[act_k, i, j] = val + combined_biases[genome_key, 0, act_k, 0]
+            local_idx = int(key_to_local[key])
+            if local_idx < 0 or local_idx >= combined_weights.shape[0]:
+                for act_k in range(out_mem.shape[0]):
+                    out_mem[act_k, i, j] = 0.0
+            else:
+                rot = int(mem[0, inds.rot, i, j])
+                n_dirs = dir_kernel.shape[0]
+                for act_k in range(out_mem.shape[0]):
+                    val = 0.0
+                    for sense_ch_n in ti.ndrange(sense_chinds.shape[0]):
+                        start_weight_ind = sense_ch_n * (n_dirs + 1)
+                        val += (mem[0, sense_chinds[sense_ch_n], i, j] *
+                                combined_weights[local_idx, 0, act_k, start_weight_ind])
+                        for offset_m in ti.ndrange(n_dirs):
+                            ind = (rot + int(dir_order[offset_m]) + n_dirs) % n_dirs
+                            neigh_x = (i + dir_kernel[ind, 0]) % mem.shape[2]
+                            neigh_y = (j + dir_kernel[ind, 1]) % mem.shape[3]
+                            weight_ind = start_weight_ind + offset_m
+                            val += (mem[0, sense_chinds[sense_ch_n], neigh_x, neigh_y] *
+                                    combined_weights[local_idx, 0, act_k, weight_ind])
+                    out_mem[act_k, i, j] = val + combined_biases[local_idx, 0, act_k, 0]
 
 
 @ti.data_oriented
@@ -83,12 +90,16 @@ class SpaceEvolver():
         self.energy_offset = 0.0
 
         self.genomes = []
+        self.genome_keys = []          # stable integer key per genome (never remapped)
+        self._next_key = 0             # monotonically increasing key counter
         self.ages = []
         self.combined_weights = []
         self.combined_biases = []
         self._cached_cw = None
         self._cached_cb = None
         self._weights_dirty = True
+        self._key_to_local_cache = None
+        self._key_map_dirty = True
         self._scratch = {}
         self.init_population()
         self.init_substrate(self.genomes)
@@ -111,6 +122,30 @@ class SpaceEvolver():
         else:
             self._scratch[key].zero_()
         return self._scratch[key]
+
+    def _get_key_to_local(self) -> torch.Tensor:
+        """Return int32 tensor (max_key+1,): stable_key → local_idx. -1 = dead."""
+        if not self._key_map_dirty and self._key_to_local_cache is not None:
+            return self._key_to_local_cache
+        if not self.genome_keys:
+            self._key_to_local_cache = torch.zeros(1, dtype=torch.int32,
+                                                    device=self.torch_device)
+            self._key_map_dirty = False
+            return self._key_to_local_cache
+        max_key = max(self.genome_keys)
+        kt = torch.full((max_key + 1,), -1, dtype=torch.int32, device=self.torch_device)
+        for local_idx, key in enumerate(self.genome_keys):
+            kt[key] = local_idx
+        self._key_to_local_cache = kt
+        self._key_map_dirty = False
+        return kt
+
+    def local_idx_for_key(self, key: int) -> int:
+        """Return local index for a stable genome key, -1 if not present."""
+        for i, k in enumerate(self.genome_keys):
+            if k == key:
+                return i
+        return -1
 
     def run(self, n_timesteps, vis, n_rad_spots, radiate_interval, cull_max_pop, cull_interval=100):
         timestep = 0
@@ -203,6 +238,56 @@ class SpaceEvolver():
                 out_mem[i, j] = mem[0, inds.genome, i, j]
             else:
                 out_mem[i, j] = genome_transitions[int(mem[0, inds.genome, i, j])]
+
+    def remove_extinct_genomes(self):
+        """Remap and drop genomes whose cell count has reached zero.
+
+        Never kills a genome that still holds any cells.  Returns the number
+        of genomes removed.  Call this periodically instead of
+        reduce_population_to_threshold to let natural selection regulate
+        population size without destroying live organisms.
+        """
+        inds = self.substrate.ti_indices[None]
+        genome_ch = self.substrate.mem[0, inds.genome]
+
+        alive_cells = genome_ch[genome_ch >= 0]
+        if alive_cells.numel() == 0:
+            return 0
+
+        alive_ids = set(alive_cells.long().unique().tolist())
+        n_total = len(self.genomes)
+        n_extinct = sum(1 for i in range(n_total) if i not in alive_ids)
+        if n_extinct == 0:
+            return 0
+
+        new_genomes, new_ages, new_cw, new_cb = [], [], [], []
+        genome_transitions = [-1] * n_total
+
+        for old_idx in range(n_total):
+            if old_idx in alive_ids:
+                new_idx = len(new_genomes)
+                new_genomes.append(self.genomes[old_idx])
+                new_ages.append(self.ages[old_idx])
+                new_cw.append(self.combined_weights[old_idx])
+                new_cb.append(self.combined_biases[old_idx])
+                genome_transitions[old_idx] = new_idx
+            # extinct entries stay -1
+
+        transitions_t = torch.tensor(genome_transitions, dtype=torch.float32,
+                                     device=self.torch_device)
+        out_mem = torch.zeros_like(genome_ch)
+        self.replace_genomes(self.substrate.mem, out_mem, transitions_t,
+                             self.substrate.ti_indices)
+        self.substrate.mem[0, inds.genome] = out_mem
+
+        self.genomes          = new_genomes
+        self.ages             = new_ages
+        self.combined_weights = new_cw
+        self.combined_biases  = new_cb
+        self._invalidate_weight_cache()
+        self.time_last_cull = self.timestep
+        print(f"  [cleanup] {n_extinct} extinct genomes removed -> {len(self.genomes)} remain")
+        return n_extinct
 
     def reduce_population_to_threshold(self, max_population):
         print(f"REDUCING pop to max of {max_population} from current size: {len(self.genomes)}")

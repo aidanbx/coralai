@@ -42,7 +42,11 @@ parser.add_argument("--profile", action="store_true")
 parser.add_argument("--benchmark", action="store_true")
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--radiate-interval", type=int, default=50)
-parser.add_argument("--cull-max-pop", type=int, default=100)
+parser.add_argument("--cleanup-interval", type=int, default=100,
+                    help="Steps between extinct-genome sweeps (removes 0-cell genomes only).")
+parser.add_argument("--emergency-pop-cap", type=int, default=1000,
+                    help="Hard cap: force-cull live genomes only if count exceeds this. "
+                         "Set to 0 to disable entirely. Default 1000.")
 parser.add_argument("--checkpoint-interval", type=int, default=1000,
                     help="Steps between checkpoints (0 = disable)")
 parser.add_argument("--log-interval", type=int, default=10)
@@ -159,8 +163,10 @@ def main():
             "resumed_from": args.resume_from,
             "start_time":   datetime.now().isoformat(),
             "git_hash":     _git_hash,
-            "infra_decay":  args.infra_decay,
-            "defense_coeff": args.defense_coeff,
+            "infra_decay":       args.infra_decay,
+            "defense_coeff":     args.defense_coeff,
+            "cleanup_interval":  args.cleanup_interval,
+            "emergency_pop_cap": args.emergency_pop_cap,
         }, f, indent=2)
 
     if not args.benchmark:
@@ -220,9 +226,16 @@ def main():
             apply_radiation_mutation(evolver, 5)
             sync(); timings["4_radiation"] += time.perf_counter() - t0
 
-        if (len(evolver.genomes) > args.cull_max_pop
+        # Periodic extinct-only cleanup: remove genomes with 0 cells (never kills live ones)
+        if step % args.cleanup_interval == 0 and step > 0:
+            evolver.remove_extinct_genomes()
+
+        # Emergency hard cap: only fires if natural extinction isn't keeping up
+        if (args.emergency_pop_cap > 0
+                and len(evolver.genomes) > args.emergency_pop_cap
                 and (step - evolver.time_last_cull) > 50):
-            evolver.reduce_population_to_threshold(args.cull_max_pop)
+            print(f"  [emergency] population {len(evolver.genomes)} > cap {args.emergency_pop_cap}")
+            evolver.reduce_population_to_threshold(args.emergency_pop_cap)
 
         evolver.timestep = step + 1
         dt = time.perf_counter() - t_step
