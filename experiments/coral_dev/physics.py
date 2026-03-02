@@ -41,11 +41,13 @@ def activate_outputs(substrate):
 def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
             infra_delta: ti.types.ndarray(), energy_delta: ti.types.ndarray(),
             winning_genomes: ti.types.ndarray(), winning_rots: ti.types.ndarray(),
-            dir_kernel: ti.types.ndarray(), dir_order: ti.types.ndarray(), ti_inds: ti.template()):
+            dir_kernel: ti.types.ndarray(), dir_order: ti.types.ndarray(),
+            ti_inds: ti.template(), defense_coeff: ti.f32):
     inds = ti_inds[None]
     for i, j in ti.ndrange(mem.shape[2], mem.shape[3]):
         winning_genome = mem[0, inds.genome, i, j]
-        max_bid = mem[0, inds.energy, i, j]
+        # defense_coeff > 0: established cells (high infra) are harder to colonize
+        max_bid = mem[0, inds.energy, i, j] + mem[0, inds.infra, i, j] * defense_coeff
         winning_rot = mem[0, inds.rot, i, j]
 
         for offset_n in ti.ndrange(dir_kernel.shape[0]): # this order doesn't matter
@@ -78,7 +80,7 @@ def explore(mem: ti.types.ndarray(), max_act_i: ti.types.ndarray(),
 
 _explore_scratch = {}
 
-def explore_physics(substrate, dir_kernel, dir_order):
+def explore_physics(substrate, dir_kernel, dir_order, defense_coeff: float = 0.0):
     inds = substrate.ti_indices[None]
     grid_shape = substrate.mem[0, inds.infra].shape
     device = substrate.torch_device
@@ -99,7 +101,7 @@ def explore_physics(substrate, dir_kernel, dir_order):
     explore(substrate.mem, max_act_i,
             _explore_scratch["infra_delta"], _explore_scratch["energy_delta"],
             _explore_scratch["winning_genome"], _explore_scratch["winning_rots"],
-            dir_kernel, dir_order, substrate.ti_indices)
+            dir_kernel, dir_order, substrate.ti_indices, defense_coeff)
     substrate.mem[0, inds.infra] += _explore_scratch["infra_delta"]
     substrate.mem[0, inds.energy] += _explore_scratch["energy_delta"]
     substrate.mem[0, inds.genome] = _explore_scratch["winning_genome"]

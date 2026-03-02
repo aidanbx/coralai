@@ -5,15 +5,15 @@ Active development branch. Diverges from the thesis version (experiments/coral/)
 with physics fixes and ongoing improvements. Current changes vs. thesis:
 
   - softmax invest/liquidate → tanh signed trade (physics.py activate_outputs)
-
-See logs/ for design rationale on each change.
+  - uniform day/night energy removed; patches are the sole energy source
+  - infra-as-defense and infra decay available via CLI flags
 
 Usage:
-    python experiments/coral_dev/run.py
+    python experiments/coral_dev/run.py --env patches
+    python experiments/coral_dev/run.py --env patches --env-param 12
+    python experiments/coral_dev/run.py --env patches --infra-decay 0.002 --defense-coeff 0.5
     python experiments/coral_dev/run.py --no-gui --steps 300 --profile
     python experiments/coral_dev/run.py --benchmark --steps 200 --shape 400
-    python experiments/coral_dev/run.py --env hole --env-param 0.35
-    python experiments/coral_dev/run.py --env stripes --env-param 6
     python experiments/coral_dev/run.py --backend cpu --device cpu --no-gui --steps 100
 """
 
@@ -47,8 +47,12 @@ parser.add_argument("--checkpoint-interval", type=int, default=1000,
                     help="Steps between checkpoints (0 = disable)")
 parser.add_argument("--log-interval", type=int, default=10)
 parser.add_argument("--env", type=str, default="flat",
-                    choices=["flat", "hole", "ring", "stripes", "corners"])
+                    choices=["flat", "hole", "ring", "stripes", "corners", "patches", "oases"])
 parser.add_argument("--env-param", type=float, default=None)
+parser.add_argument("--infra-decay", type=float, default=0.0,
+                    help="Infra lost per step as a fraction (e.g. 0.002). 0=disabled.")
+parser.add_argument("--defense-coeff", type=float, default=0.0,
+                    help="Infra-as-defense multiplier in explore kernel. 0=disabled.")
 parser.add_argument("--resume-from", type=str, default=None,
                     help="Path to a checkpoint dir; resume run from that state. "
                          "--steps counts additional steps from the checkpoint.")
@@ -67,6 +71,10 @@ DEVICE = torch.device(args.device)
 
 from coralai.evolver import apply_weights_and_biases
 from experiment import EXPERIMENT as exp
+
+# Apply CLI-specified physics parameters to the experiment
+exp.infra_decay   = args.infra_decay
+exp.defense_coeff = args.defense_coeff
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +159,8 @@ def main():
             "resumed_from": args.resume_from,
             "start_time":   datetime.now().isoformat(),
             "git_hash":     _git_hash,
+            "infra_decay":  args.infra_decay,
+            "defense_coeff": args.defense_coeff,
         }, f, indent=2)
 
     if not args.benchmark:

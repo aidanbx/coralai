@@ -211,29 +211,38 @@ class SpaceEvolver():
             return
 
         inds = self.substrate.ti_indices[None]
-        genome_cell_counts = [(i, self.substrate.mem[0, inds.genome].eq(i).sum().item()) for i in range(len(self.genomes))]
-        # Sort genomes by cell count (ascending) to identify those with the lowest count
-        sorted_genomes_by_cell_count = sorted(genome_cell_counts, key=lambda x: x[1], reverse=True)
+        genome_cell_counts = [
+            (i, self.substrate.mem[0, inds.genome].eq(i).sum().item())
+            for i in range(len(self.genomes))
+        ]
+        sorted_by_cells = sorted(genome_cell_counts, key=lambda x: x[1], reverse=True)
+
         new_genomes = []
         new_ages = []
         new_combined_weights = []
         new_combined_biases = []
-        genome_transitions = [None] * len(self.genomes)
-        for i in range(len(sorted_genomes_by_cell_count)):
-            index_of_genome = sorted_genomes_by_cell_count[i][0]
-            if i > max_population:
-                print(f"KILLING {index_of_genome}")
-                genome_transitions[index_of_genome] = -1
+        genome_transitions = [-1] * len(self.genomes)  # default: kill
+
+        for rank, (old_idx, cell_count) in enumerate(sorted_by_cells):
+            if rank >= max_population:
+                # genome_transitions[old_idx] stays -1 → cells marked dead
+                print(f"KILLING genome {old_idx} ({cell_count} cells)")
             else:
-                new_genomes.append(self.genomes[index_of_genome])
-                new_ages.append(self.ages[index_of_genome])
-                new_combined_weights.append(self.combined_weights[index_of_genome])
-                new_combined_biases.append(self.combined_biases[index_of_genome])
-                genome_transitions[index_of_genome] = len(new_genomes)
-        genome_transitions = torch.tensor(genome_transitions, device = self.torch_device)
+                # Assign 0-based new index BEFORE appending
+                new_idx = len(new_genomes)
+                new_genomes.append(self.genomes[old_idx])
+                new_ages.append(self.ages[old_idx])
+                new_combined_weights.append(self.combined_weights[old_idx])
+                new_combined_biases.append(self.combined_biases[old_idx])
+                genome_transitions[old_idx] = new_idx
+
+        # float32 matches the genome channel dtype
+        transitions_t = torch.tensor(genome_transitions, dtype=torch.float32,
+                                     device=self.torch_device)
         out_mem = torch.zeros_like(self.substrate.mem[0, inds.genome])
-        self.replace_genomes(self.substrate.mem, out_mem, genome_transitions, self.substrate.ti_indices)
-        self.substrate.mem[0, inds.genome] = out_mem 
+        self.replace_genomes(self.substrate.mem, out_mem, transitions_t,
+                             self.substrate.ti_indices)
+        self.substrate.mem[0, inds.genome] = out_mem
 
         self.genomes = new_genomes
         self.ages = new_ages
@@ -244,7 +253,7 @@ class SpaceEvolver():
         print(f"\tPop size after reduction: {len(self.genomes)}")
         if len(self.genomes) == 0:
             print("NO GENOMES LEFT. REINITIALIZING")
-            self.genomes = self.init_population()
+            self.init_population()
             self.init_substrate(self.genomes)
 
 

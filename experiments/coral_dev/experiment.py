@@ -112,7 +112,6 @@ class CoralVis(Visualization):
             tot_i = torch.sum(self.substrate.mem[0, inds.infra])
             sw.text(f"Total E+I: {tot_e + tot_i:.1f}")
             sw.text(f"Energy%: {100 * tot_e / (tot_e + tot_i):.1f}%")
-            sw.text(f"E offset: {self.evolver.energy_offset:.3f}")
             sw.text(f"Genomes: {len(self.evolver.genomes)}")
             if self.fps_history:
                 sw.text(f"FPS: {self.fps_history[-1]:.1f}")
@@ -139,6 +138,10 @@ class CoralDevExperiment(Experiment):
     act_chs   = ACT_CHS
     _exp_dir  = _EXPERIMENT_DIR
 
+    # Tunable physics parameters (overridable via run.py CLI args)
+    infra_decay   = 0.0   # fraction of infra lost per step; 0 = disabled
+    defense_coeff = 0.0   # infra-as-defense multiplier; 0 = disabled
+
     def make_env(self, env_name: str = "flat", param=None):
         from environments import make_env
         return make_env(env_name, param)
@@ -152,7 +155,8 @@ class CoralDevExperiment(Experiment):
                              explore_physics, energy_physics)
         activate_outputs(substrate)
         invest_liquidate(substrate)
-        explore_physics(substrate, evolver.kernel, evolver.dir_order)
+        explore_physics(substrate, evolver.kernel, evolver.dir_order,
+                        defense_coeff=self.defense_coeff)
         energy_physics(substrate, evolver.kernel, max_infra=10, max_energy=1.5)
 
         inds = substrate.ti_indices[None]
@@ -160,18 +164,18 @@ class CoralDevExperiment(Experiment):
         substrate.mem[0, inds.genome].masked_fill_(~alive, -1)
 
     def run_evolution(self, substrate, evolver, step: int):
-        """Sinusoidal noise injection, age tracking, and periodic chunk death."""
-        from evolution import kill_random_chunk, get_energy_offset
-        evolver.energy_offset = get_energy_offset(step)
+        """Age tracking, infra decay, and periodic chunk death.
+
+        Energy injection is now handled entirely by the environment (patches).
+        No global day/night cycle.
+        """
+        from evolution import kill_random_chunk
         evolver.ages = [a + 1 for a in evolver.ages]
         inds = substrate.ti_indices[None]
-        offset = evolver.energy_offset
-        substrate.mem[0, inds.energy].add_(
-            torch.randn_like(substrate.mem[0, inds.energy]).add_(offset).mul_(0.1))
-        substrate.mem[0, inds.infra].add_(
-            torch.randn_like(substrate.mem[0, inds.infra]).add_(offset).mul_(0.1))
-        substrate.mem[0, inds.energy].clamp_(0.01, 100)
-        substrate.mem[0, inds.infra].clamp_(0.01, 100)
+        if self.infra_decay > 0:
+            substrate.mem[0, inds.infra] *= (1.0 - self.infra_decay)
+        substrate.mem[0, inds.energy].clamp_(0.0, 100)
+        substrate.mem[0, inds.infra].clamp_(0.0, 100)
         if step % 50 == 0:
             kill_random_chunk(evolver, 5)
 

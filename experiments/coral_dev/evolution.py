@@ -54,10 +54,3 @@ def apply_radiation_mutation(evolver, n_spots=5, spot_live_radius=2, spot_dead_r
                 )
                 new_key = evolver.add_organism_get_key(new_genome)
                 evolver.set_chunk(new_key, xs[i], ys[i], spot_live_radius)
-
-
-def get_energy_offset(step, repeat_steps=50, amplitude=1.0,
-                      positive_scale=1.0, negative_scale=1.0):
-    """Sinusoidal energy injection offset. Pure function of step number."""
-    value = amplitude * np.sin((2 * np.pi / repeat_steps) * step)
-    return float(value * (positive_scale if value > 0 else negative_scale))
